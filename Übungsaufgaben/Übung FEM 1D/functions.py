@@ -47,7 +47,7 @@ def assemble_element(nodes: np.array, start_index: float, end_index: float, alph
     }
     return element
 
-def create_globaL_les(elements, boundary_condition):
+def create_global_les(elements, boundary_condition):
     number_of_nodes = len(elements) +1
     number_of_boundaries = len(boundary_condition)
     
