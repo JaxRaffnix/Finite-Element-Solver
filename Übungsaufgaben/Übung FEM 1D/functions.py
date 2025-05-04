@@ -1,5 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
+
+sns.set_theme()
 
 def get_edge_indices(nodes: np.array) -> np.array:
     "Returns index pairs representing element edges based on nodes, sorted internally."
@@ -46,54 +49,58 @@ def assemble_element(nodes: np.array, start_index: float, end_index: float, alph
 
 def create_globaL_les(elements, boundary_condition):
     number_of_nodes = len(elements) +1
+    number_of_boundaries = len(boundary_condition)
     
     coefficients_matrix = np.zeros(shape=(number_of_nodes, number_of_nodes))
     rhs_matrix = np.zeros(shape=(number_of_nodes, 1))
 
-    # TODO: fix the out of bounds error!
     for element in elements:
-        coefficients_matrix[element["Start Index"]][element["Start Index"]] += element["Coefficients"][0][0]
-        coefficients_matrix[element["Start Index"]][element["End Index"]] += element["Coefficients"][0][1]
-        coefficients_matrix[element["End Index"]][element["Start Index"]] += element["Coefficients"][1][0]
-        coefficients_matrix[element["End Index"]][element["End Index"]] += element["Coefficients"][1][1]
+        start_index = element["Start Index"]
+        end_index = element["End Index"]
 
-        rhs_matrix[element["Start Index"]] += element["Right Hand Side"][0]
-        rhs_matrix[element["End Index"]] += element["Right Hand Side"][1]
+        coefficients_matrix[start_index][start_index] += element["Coefficients"][0][0]
+        coefficients_matrix[start_index][end_index] += element["Coefficients"][0][1]
+        coefficients_matrix[end_index][start_index] += element["Coefficients"][1][0]
+        coefficients_matrix[end_index][end_index] += element["Coefficients"][1][1]
 
-        # remove row from coefficients_matrix: 
-    coefficients_matrix = np.delete(coefficients_matrix, boundary_condition["Lower Bound"]["x Index"], axis=0)
-    coefficients_matrix = np.delete(coefficients_matrix, boundary_condition["Upper Bound"]["x Index"], axis=0)
+        rhs_matrix[start_index] += element["Right Hand Side"][0]
+        rhs_matrix[end_index] += element["Right Hand Side"][1]
 
-    # remove row from right_hand_side_matrix
-    rhs_matrix = np.delete(rhs_matrix, boundary_condition["Lower Bound"]["x Index"], axis=0)
-    rhs_matrix = np.delete(rhs_matrix, boundary_condition["Upper Bound"]["x Index"], axis=0)
+        
+    boundary_indices = [boundary_condition["Lower Bound"]["x Index"], boundary_condition["Upper Bound"]["x Index"]]
+    
+    # remove rows
+    coefficients_matrix = np.delete(coefficients_matrix, boundary_indices, axis=0)# remove row from coefficients_matrix: 
+    rhs_matrix = np.delete(rhs_matrix, boundary_indices, axis=0) # remove row from right_hand_side_matrix
 
-    rhs_matrix = rhs_matrix - boundary_condition["Upper Bound"]["Phi"] * coefficients_matrix[: ,boundary_condition["Upper Bound"]["x Index"]].reshape(number_of_nodes -2, 1) - boundary_condition["Lower Bound"]["Phi"] * coefficients_matrix[: ,boundary_condition["Lower Bound"]["x Index"]].reshape(number_of_nodes -2,1)
+    # update rhs with boundary values
+    rhs_matrix = rhs_matrix - boundary_condition["Upper Bound"]["Phi"] * coefficients_matrix[: ,boundary_indices[1]].reshape(number_of_nodes -number_of_boundaries, 1) - boundary_condition["Lower Bound"]["Phi"] * coefficients_matrix[: ,boundary_indices[0]].reshape(number_of_nodes -number_of_boundaries, 1)
 
     # remove column from coefficients_matrix: 
-    coefficients_matrix = np.delete(coefficients_matrix, boundary_condition["Lower Bound"]["x Index"], axis=1)
-    coefficients_matrix = np.delete(coefficients_matrix, boundary_condition["Upper Bound"]["x Index"], axis=1)
+    coefficients_matrix = np.delete(coefficients_matrix, boundary_indices, axis=1)
 
     return coefficients_matrix, rhs_matrix
 
-def solve_leq(coefficients_matrix, rhs_matrix, boundary_condition):
-    reduced_solutions = np.linalg.solve(coefficients_matrix, rhs_matrix)
+def solve_leq(coefficients_matrix, rhs_matrix, boundary_condition, number_of_nodes):
 
-    # TODO: Insert the boundary values
+    reduced_solution = np.linalg.solve(coefficients_matrix, rhs_matrix)
 
-    # TODO: sort the solution according to the node index
-    pass
+    boundary_indices = [boundary_condition["Lower Bound"]["x Index"], boundary_condition["Upper Bound"]["x Index"]]
+    boundary_values = [[boundary_condition["Lower Bound"]["Phi"]], 
+                       [boundary_condition["Upper Bound"]["Phi"]]]
+    kept_indices = np.setdiff1d(np.arange(number_of_nodes), boundary_indices)
 
-def plot_solution(y, boundary_condition):
-    number_of_nodes = len(y)
-    x = np.linspace(boundary_condition["Lower Bound"]["x"], boundary_condition["Upper Bound"]["x"], num=number_of_nodes)
+    full_solution = np.full((number_of_nodes, 1), np.nan)
+    full_solution[kept_indices] = reduced_solution
+    full_solution[boundary_indices] = boundary_values
 
-    plt.plot(x, y)
-    plt.scatter(x, y)
+    return full_solution
 
+def show_solution(y, nodes):
+    plt.plot(nodes, y)
     plt.xlabel("x")
-    plt.ylabel(r"\Phi (x)")
-    plt.title(f"FEM Solution with {number_of_nodes} Nodes")
+    plt.ylabel(r"$\Phi (x)$")
+    plt.title(f"FEM Solution with {len(nodes)} Nodes")
 
     plt.tight_layout()
     plt.show()
