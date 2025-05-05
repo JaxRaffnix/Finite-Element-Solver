@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -47,9 +48,8 @@ def assemble_element(nodes: np.array, start_index: float, end_index: float, alph
     }
     return element
 
-def create_global_les(elements, boundary_condition):
+def create_global_les(elements: list):
     number_of_nodes = len(elements) +1
-    number_of_boundaries = len(boundary_condition)
     
     coefficients_matrix = np.zeros(shape=(number_of_nodes, number_of_nodes))
     rhs_matrix = np.zeros(shape=(number_of_nodes, 1))
@@ -66,7 +66,12 @@ def create_global_les(elements, boundary_condition):
         rhs_matrix[start_index] += element["Right Hand Side"][0]
         rhs_matrix[end_index] += element["Right Hand Side"][1]
 
-        
+    return coefficients_matrix, rhs_matrix
+
+
+def _reduce_matrices(coefficients_matrix: np.array, rhs_matrix: np.array, boundary_condition: dict):
+    number_of_nodes = len(rhs_matrix)
+    number_of_boundaries = len(boundary_condition)
     boundary_indices = [boundary_condition["Lower Bound"]["x Index"], boundary_condition["Upper Bound"]["x Index"]]
     
     # remove rows
@@ -81,20 +86,34 @@ def create_global_les(elements, boundary_condition):
 
     return coefficients_matrix, rhs_matrix
 
-def solve_leq(coefficients_matrix, rhs_matrix, boundary_condition, number_of_nodes):
+
+def solve_leq(coefficients_matrix: np.array, rhs_matrix: np.array, number_of_nodes: int, boundary_condition: dict = None):
+
+    # Reduce the matrices by the boundary condition
+    if boundary_condition:
+        coefficients_matrix, rhs_matrix = _reduce_matrices(coefficients_matrix, rhs_matrix, boundary_condition)
 
     reduced_solution = np.linalg.solve(coefficients_matrix, rhs_matrix)
 
-    boundary_indices = [boundary_condition["Lower Bound"]["x Index"], boundary_condition["Upper Bound"]["x Index"]]
-    boundary_values = [[boundary_condition["Lower Bound"]["Phi"]], 
-                       [boundary_condition["Upper Bound"]["Phi"]]]
-    kept_indices = np.setdiff1d(np.arange(number_of_nodes), boundary_indices)
+    # Insert the boundary values to the solutions vector at the correct index
+    if boundary_condition:
+        boundary_indices = [boundary_condition["Lower Bound"]["x Index"], boundary_condition["Upper Bound"]["x Index"]]
+        boundary_values = [[boundary_condition["Lower Bound"]["Phi"]], [boundary_condition["Upper Bound"]["Phi"]]]
+        kept_indices = np.setdiff1d(np.arange(number_of_nodes), boundary_indices)
 
-    full_solution = np.full((number_of_nodes, 1), np.nan)
-    full_solution[kept_indices] = reduced_solution
-    full_solution[boundary_indices] = boundary_values
+        full_solution = np.full((number_of_nodes, 1), np.nan)
+        full_solution[kept_indices] = reduced_solution
+        full_solution[boundary_indices] = boundary_values
 
-    return full_solution
+        return full_solution
+    else:
+        return reduced_solution
+
+def create_solution_df(nodes: np.array, solution: np.array):
+    solution_df = pd.DataFrame({"x": nodes.flatten(), "Phi": solution.flatten()})
+
+    solution_df = solution_df.sort_values("x")
+    return solution_df
 
 def show_solution(y, nodes):
     plt.plot(nodes, y)
