@@ -71,33 +71,53 @@ def create_global_les(elements: list):
 
 def reduce_matrices(coefficients_matrix: np.array, rhs_matrix: np.array, boundary_condition: dict):
     """
-    Used for Dirichlet issues.
-    """
-    number_of_nodes = len(rhs_matrix)
-    number_of_boundaries = len(boundary_condition)
-    boundary_indices = [boundary_condition["Lower Bound"]["x Index"], boundary_condition["Upper Bound"]["x Index"]]
+    Reduces the system of equations for Dirichlet boundary conditions.
     
-    # remove rows
-    coefficients_matrix = np.delete(coefficients_matrix, boundary_indices, axis=0)# remove row from coefficients_matrix: 
-    rhs_matrix = np.delete(rhs_matrix, boundary_indices, axis=0) # remove row from right_hand_side_matrix
+    Parameters:
+        coefficients_matrix: Full system matrix (n x n)
+        rhs_matrix: Right-hand side vector (n x 1)
+        boundary_condition: Dictionary with boundary info. Entries must include "x Index" and optionally "Phi".
+        
+    Returns:
+        (reduced_matrix, reduced_rhs): Modified system excluding Dirichlet DOFs.
+    """
+    boundary_indices = []
+    
+    # Apply Dirichlet values where Phi is defined
+    for bc in boundary_condition.values():
+        if "Phi" in bc:
+            idx = bc["x Index"]
+            phi = bc["Phi"]
 
-    # update rhs with boundary values
-    rhs_matrix = rhs_matrix - boundary_condition["Upper Bound"]["Phi"] * coefficients_matrix[: ,boundary_indices[1]].reshape(number_of_nodes -number_of_boundaries, 1) - boundary_condition["Lower Bound"]["Phi"] * coefficients_matrix[: ,boundary_indices[0]].reshape(number_of_nodes -number_of_boundaries, 1)
+            rhs_matrix -= phi * coefficients_matrix[:, idx].reshape(-1, 1)
+            boundary_indices.append(idx)
 
-    # remove column from coefficients_matrix: 
+    # Remove Dirichlet rows and columns
+    coefficients_matrix = np.delete(coefficients_matrix, boundary_indices, axis=0)
     coefficients_matrix = np.delete(coefficients_matrix, boundary_indices, axis=1)
+    rhs_matrix = np.delete(rhs_matrix, boundary_indices, axis=0)
 
     return coefficients_matrix, rhs_matrix
 
 
 def add_robin_issue_values(coefficients_matrix: np.array, rhs_matrix: np.array, boundary_condition: dict):
-    boundary_indices = [boundary_condition["Lower Bound"]["x Index"], boundary_condition["Upper Bound"]["x Index"]]
-    boundary_gamma = [boundary_condition["Lower Bound"]["Gamma"], boundary_condition["Upper Bound"]["Gamma"]]
-    boundary_rho = [boundary_condition["Lower Bound"]["Rho"], boundary_condition["Upper Bound"]["Rho"]]
 
-    for i, boundary_index in enumerate(boundary_indices):
-        coefficients_matrix[boundary_index, boundary_index] += boundary_gamma[i]
-        rhs_matrix[boundary_index] += boundary_rho[i]
+    for bc in boundary_condition.values():
+        if "Gamma" in bc:
+            idx = bc["x Index"]
+            gamma = bc["Gamma"]
+            rho = bc["Rho"]
+
+            coefficients_matrix[idx][idx] += gamma
+            rhs_matrix[idx] += rho
+
+
+    # boundary_indices = [boundary_condition["Lower Bound"]["x Index"], boundary_condition["Upper Bound"]["x Index"]]
+    # boundary_gamma = [boundary_condition["Lower Bound"]["Gamma"], boundary_condition["Upper Bound"]["Gamma"]]
+    # boundary_rho = [boundary_condition["Lower Bound"]["Rho"], boundary_condition["Upper Bound"]["Rho"]]
+    # for i, boundary_index in enumerate(boundary_indices):
+    #     coefficients_matrix[boundary_index, boundary_index] += boundary_gamma[i]
+    #     rhs_matrix[boundary_index] += boundary_rho[i]
 
     return coefficients_matrix, rhs_matrix
 
@@ -107,9 +127,55 @@ def solve_leq(coefficients_matrix: np.array, rhs_matrix: np.array):
     return reduced_solution
 
     
+# def insert_boundary_values(reduced_solution: np.array, number_of_nodes: int, boundary_condition: dict):
+
+#     boundary_indices = []
+#     boundary_values = []
+#     for bc in boundary_condition.values():
+#         if "Phi" in bc:
+#             idx = bc["x Index"]
+#             boundary_indices.append(idx)
+#             phi = bc["Phi"]
+#             boundary_values.append(phi)
+
+#     kept_indices = np.setdiff1d(np.arange(number_of_nodes), boundary_indices)
+#     full_solution = np.full((number_of_nodes, 1), np.nan)    
+#     full_solution[kept_indices] = reduced_solution
+#     full_solution[boundary_indices] = boundary_values
+
+#     # boundary_indices = [boundary_condition["Lower Bound"]["x Index"], boundary_condition["Upper Bound"]["x Index"]]
+#     # boundary_values = [[boundary_condition["Lower Bound"]["Phi"]], [boundary_condition["Upper Bound"]["Phi"]]]
+#     # kept_indices = np.setdiff1d(np.arange(number_of_nodes), boundary_indices)
+
+#     # full_solution = np.full((number_of_nodes, 1), np.nan)
+#     # full_solution[kept_indices] = reduced_solution
+#     # full_solution[boundary_indices] = boundary_values
+
+#     return full_solution
+
 def insert_boundary_values(reduced_solution: np.array, number_of_nodes: int, boundary_condition: dict):
-    boundary_indices = [boundary_condition["Lower Bound"]["x Index"], boundary_condition["Upper Bound"]["x Index"]]
-    boundary_values = [[boundary_condition["Lower Bound"]["Phi"]], [boundary_condition["Upper Bound"]["Phi"]]]
+    """
+    Reconstructs the full solution by inserting known Dirichlet boundary values.
+
+    Parameters:
+        reduced_solution: Solution vector without Dirichlet nodes (shape: (n - num_dirichlet, 1))
+        number_of_nodes: Total number of nodes in the original system
+        boundary_condition: Dictionary of boundary conditions (must include "x Index" and optionally "Phi")
+
+    Returns:
+        full_solution: Complete solution vector including Dirichlet values (shape: (number_of_nodes, 1))
+    """
+    boundary_indices = []
+    boundary_values = []
+
+    for bc in boundary_condition.values():
+        if "Phi" in bc:
+            boundary_indices.append(bc["x Index"])
+            boundary_values.append(bc["Phi"])
+
+    boundary_indices = np.array(boundary_indices)
+    boundary_values = np.array(boundary_values).reshape(-1, 1)  # Ensure column shape
+
     kept_indices = np.setdiff1d(np.arange(number_of_nodes), boundary_indices)
 
     full_solution = np.full((number_of_nodes, 1), np.nan)
