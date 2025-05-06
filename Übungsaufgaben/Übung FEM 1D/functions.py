@@ -111,14 +111,6 @@ def add_robin_issue_values(coefficients_matrix: np.array, rhs_matrix: np.array, 
             coefficients_matrix[idx][idx] += gamma
             rhs_matrix[idx] += rho
 
-
-    # boundary_indices = [boundary_condition["Lower Bound"]["x Index"], boundary_condition["Upper Bound"]["x Index"]]
-    # boundary_gamma = [boundary_condition["Lower Bound"]["Gamma"], boundary_condition["Upper Bound"]["Gamma"]]
-    # boundary_rho = [boundary_condition["Lower Bound"]["Rho"], boundary_condition["Upper Bound"]["Rho"]]
-    # for i, boundary_index in enumerate(boundary_indices):
-    #     coefficients_matrix[boundary_index, boundary_index] += boundary_gamma[i]
-    #     rhs_matrix[boundary_index] += boundary_rho[i]
-
     return coefficients_matrix, rhs_matrix
 
 
@@ -126,32 +118,6 @@ def solve_leq(coefficients_matrix: np.array, rhs_matrix: np.array):
     reduced_solution = np.linalg.solve(coefficients_matrix, rhs_matrix)
     return reduced_solution
 
-    
-# def insert_boundary_values(reduced_solution: np.array, number_of_nodes: int, boundary_condition: dict):
-
-#     boundary_indices = []
-#     boundary_values = []
-#     for bc in boundary_condition.values():
-#         if "Phi" in bc:
-#             idx = bc["x Index"]
-#             boundary_indices.append(idx)
-#             phi = bc["Phi"]
-#             boundary_values.append(phi)
-
-#     kept_indices = np.setdiff1d(np.arange(number_of_nodes), boundary_indices)
-#     full_solution = np.full((number_of_nodes, 1), np.nan)    
-#     full_solution[kept_indices] = reduced_solution
-#     full_solution[boundary_indices] = boundary_values
-
-#     # boundary_indices = [boundary_condition["Lower Bound"]["x Index"], boundary_condition["Upper Bound"]["x Index"]]
-#     # boundary_values = [[boundary_condition["Lower Bound"]["Phi"]], [boundary_condition["Upper Bound"]["Phi"]]]
-#     # kept_indices = np.setdiff1d(np.arange(number_of_nodes), boundary_indices)
-
-#     # full_solution = np.full((number_of_nodes, 1), np.nan)
-#     # full_solution[kept_indices] = reduced_solution
-#     # full_solution[boundary_indices] = boundary_values
-
-#     return full_solution
 
 def insert_boundary_values(reduced_solution: np.array, number_of_nodes: int, boundary_condition: dict):
     """
