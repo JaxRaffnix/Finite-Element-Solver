@@ -58,6 +58,7 @@ def create_global_les(elements: list):
         start_index = element["Start Index"]
         end_index = element["End Index"]
 
+        # TODO: dont manually index the coefficients, automate this
         coefficients_matrix[start_index][start_index] += element["Coefficients"][0][0]
         coefficients_matrix[start_index][end_index] += element["Coefficients"][0][1]
         coefficients_matrix[end_index][start_index] += element["Coefficients"][1][0]
