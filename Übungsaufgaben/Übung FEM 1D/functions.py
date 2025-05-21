@@ -1,23 +1,43 @@
 import numpy as np
+from nptyping import NDArray, Int, Float, Shape
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+# _____________________________________________________________________________
+# Global Settings
+
 sns.set_theme()
 
-def get_edge_indices(nodes: np.array) -> np.array:
-    "Returns index pairs representing element edges based on nodes, sorted internally."
-    sorted_knots = np.sort(nodes)
-    knot_index_by_value = {value: index for index, value in enumerate(nodes)}
+# _____________________________________________________________________________
+# Edge Generator
 
-    indices = []
-    for index in range(len(sorted_knots) -1):
-        start_index = knot_index_by_value[sorted_knots[index]]
-        stop_index = knot_index_by_value[sorted_knots[index +1]]
-        indices.append([start_index, stop_index])
+def get_edge_indices(nodes: NDArray[Shape["int, 1"], Float]) -> NDArray[Shape["int, 2"], Int]:
+    """
+    Generates index pairs representing element edges based on nodes in 1D.
 
-    indices = np.array(indices, dtype=int)
-    return indices
+    Arguments:
+        nodes: 1D array of node coordinates/values.
+
+    Returns:
+        np.ndarray: An array of shape (n-1, 2) where each row contains the indices of the two nodes that form an edge.
+    """
+    if len(nodes) < 2:
+        raise ValueError(f"At least two nodes are required to form an edge. Got length: {len(nodes)}")
+    if not isinstance(nodes, np.ndarray):
+        raise ValueError(f"Input nodes must be a numpy array. Got type: {type(nodes)}")
+    if len(nodes.shape) != 1:
+        raise ValueError(f"Input nodes must be a 1D array. Got shape: {format(nodes.shape)}")
+    if np.unique(nodes).size != nodes.size:
+        raise ValueError("Input nodes must be unique.")
+    if not np.issubdtype(nodes.dtype, np.number):
+        raise ValueError("Input nodes must be numeric.")
+
+    sorted_indices = np.argsort(nodes)
+    return np.column_stack((sorted_indices[:-1], sorted_indices[1:]))
+
+# _____________________________________________________________________________
+# Local Element Generator
 
 def _get_element_coefficients(midpoint, length, alpha_func, beta_func):
     matrix1 = np.array([1, -1, -1, 1]).reshape(2,2)
@@ -35,7 +55,7 @@ def _get_element_matrices(start_value: float, end_value: float, alpha_func, beta
     length = abs(end_value - start_value)
     return _get_element_coefficients(midpoint, length, alpha_func, beta_func), _get_element_rhs(midpoint, length, rhs_func)
 
-def assemble_element(nodes: np.array, start_index: float, end_index: float, alpha_func, beta_func, rhs_func):
+def assemble_element(nodes: np.ndarray, start_index: int, end_index: int, alpha_func, beta_func, rhs_func):
     "Create the coefficient and right hand side matrix for a element defined by the index of its 2 edges."
     start_value = nodes[start_index]
     end_value = nodes[end_index]
@@ -47,6 +67,9 @@ def assemble_element(nodes: np.array, start_index: float, end_index: float, alph
         "Right Hand Side": rhs
     }
     return element
+
+# _____________________________________________________________________________
+# Create Gloabal System
 
 def create_global_les(elements: list):
     number_of_nodes = len(elements) +1
@@ -70,7 +93,7 @@ def create_global_les(elements: list):
     return coefficients_matrix, rhs_matrix
 
 
-def reduce_matrices(coefficients_matrix: np.array, rhs_matrix: np.array, boundary_condition: dict):
+def reduce_matrices(coefficients_matrix: np.ndarray, rhs_matrix: np.ndarray, boundary_condition: dict):
     """
     Reduces the system of equations for Dirichlet boundary conditions.
     
@@ -100,8 +123,10 @@ def reduce_matrices(coefficients_matrix: np.array, rhs_matrix: np.array, boundar
 
     return coefficients_matrix, rhs_matrix
 
+# _____________________________________________________________________________
+# Add Boundary Conditions
 
-def add_robin_issue_values(coefficients_matrix: np.array, rhs_matrix: np.array, boundary_condition: dict):
+def add_robin_issue_values(coefficients_matrix: np.ndarray, rhs_matrix: np.ndarray, boundary_condition: dict):
 
     for bc in boundary_condition.values():
         if "Gamma" in bc:
@@ -114,13 +139,15 @@ def add_robin_issue_values(coefficients_matrix: np.array, rhs_matrix: np.array, 
 
     return coefficients_matrix, rhs_matrix
 
+# _____________________________________________________________________________
+# Linear Solver
 
-def solve_leq(coefficients_matrix: np.array, rhs_matrix: np.array):
+def solve_leq(coefficients_matrix: np.ndarray, rhs_matrix: np.ndarray):
     reduced_solution = np.linalg.solve(coefficients_matrix, rhs_matrix)
     return reduced_solution
 
 
-def insert_boundary_values(reduced_solution: np.array, number_of_nodes: int, boundary_condition: dict):
+def insert_boundary_values(reduced_solution: np.ndarray, number_of_nodes: int, boundary_condition: dict):
     """
     Reconstructs the full solution by inserting known Dirichlet boundary values.
 
@@ -152,7 +179,7 @@ def insert_boundary_values(reduced_solution: np.array, number_of_nodes: int, bou
     return full_solution
 
 
-def create_solution_df(nodes: np.array, solution: np.array):
+def create_solution_df(nodes: np.ndarray, solution: np.ndarray):
     solution_df = pd.DataFrame({"x": nodes.flatten(), "Phi": solution.flatten()})
 
     solution_df = solution_df.sort_values("x")
