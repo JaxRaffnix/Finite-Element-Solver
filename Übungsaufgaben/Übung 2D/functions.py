@@ -1,22 +1,35 @@
+# _____________________________________________________________________________
+# Library Imports
+
+
+# vectorized data
 import numpy as np
-from scipy.sparse import lil_matrix, csr_matrix, isspmatrix, issparse
+from scipy.sparse import lil_matrix, csr_array, isspmatrix, issparse
 from scipy.sparse.linalg import spsolve
 
+# dataframes
 import pandas as pd
-import seaborn as sns
 
+# plotting
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import seaborn as sns
 
+# type hints
 from numpy.typing import NDArray
 from typing import Callable, Tuple, Union
 
 sns.set_theme()
 
 
+# _____________________________________________________________________________
+# Helpers
+
+
 def get_number_of_elements(elements: np.ndarray) -> int:
     """Returns the number of elements in the list"""
-    return elements.shape[0]
+    return len(elements)
+
 
 def plot_knots_elements(knots: np.ndarray, elements=None, ax=None):
     """
@@ -52,6 +65,10 @@ def plot_knots_elements(knots: np.ndarray, elements=None, ax=None):
         plt.text(centroid[0], centroid[1], f"Tri {i}")
 
     plt.show()
+
+
+# _____________________________________________________________________________
+# Local Elements
 
 
 def _calculate_local_stiffness(
@@ -93,49 +110,60 @@ def _calculate_local_stiffness(
     ValueError
         If array shapes do not match expected dimensions or indices are out of range.
     """
+    # Validate types and shapes
     if not isinstance(element, np.ndarray):
             raise TypeError(f"'element' must be a numpy ndarray, got {type(element)}")
     if element.ndim != 1 or element.shape[0] != 3:
         raise ValueError(f"'element' must be a 1D array of length 3, got shape {element.shape}")
     if not np.issubdtype(element.dtype, np.integer):
         raise TypeError(f"'element' array must contain integers, got {element.dtype}")
-
-    if np.any(element < 0) or np.any(element >= len(knots)):
+    if np.any(element < 0) or np.any(element >= int(len(knots))):
         raise ValueError(f"'element' contains indices out of range for knots array of length {len(knots)}")
 
-    x = knots[element][:,0]
-    y = knots[element][:,1]
-
-    # Compute b and c vectors using vectorized operations
-    b = [y[1] - y[2], y[2] - y[0], y[0] - y[1]]
-    c = [x[2] - x[1], x[0] - x[2], x[1] - x[0]]
+    # list of x, y coordinates for all knots of the element
+    x, y = knots[element].T
+    
+    # Compute helper vetors b and c using vectorized operations
+    b = np.array([
+        y[1] - y[2], 
+        y[2] - y[0], 
+        y[0] - y[1]
+    ])
+    c = np.array([
+        x[2] - x[1], 
+        x[0] - x[2], 
+        x[1] - x[0]
+    ])
 
     # Area of the triangle element
     area = ( c[1] * b[0] - c[0] * b[1] ) / 2    
     if area <= 0:
-        raise ValueError(f"Computed triangle area is non-positive ({area}). Check knot ordering.")
+        raise ValueError(f"Computed triangle area is non-positive: ({area}). Check knot ordering.")
     
-    centroid = np.mean(knots[element], axis=0)   # (x_c, y_c)
+    centroid = np.mean(knots[element], axis=0)   # returns (x_c, y_c)
 
-    # Matrices B and C formed by outer products of b and c vectors
-    B = np.outer(b, b)
+    # compute local matrices (coefficients) for the element
+    B = np.outer(b, b) # outer product
     C = np.outer(c, c)
-
     D = np.array([
         [2, 1, 1],
         [1, 2, 1],
         [1, 1, 2]
     ])
+    stiffness_matrix = alpha1(*centroid) / (4 * area) * B  \
+                     + alpha2(*centroid) / (4 * area)  * C \
+                     + beta(*centroid) * area / 12 * D
 
-    # compute local matrices for the element
-    stiffness_matrix = 1/(area * 4) * alpha1(*centroid) * B \
-                     + 1/(area * 4) * alpha2(*centroid) * C \
-                     + (area / 12) * beta(*centroid) * D
-
-    # RHS load vector (assuming rhs returns scalar source term)
-    load_vector = (area / 3) * rhs(*centroid) * np.ones(3)
+    # compute local load (right hand side) vector 
+    E = np.array([1, 1, 1])
+    load_vector = rhs(*centroid) * area / 3 * E
 
     return stiffness_matrix, load_vector
+
+
+# _____________________________________________________________________________
+# global system
+
 
 def assemble_global_system(
     knots: NDArray[np.float64],
@@ -144,17 +172,17 @@ def assemble_global_system(
     alpha2: Callable[[float, float], float],
     beta: Callable[[float, float], float],
     rhs: Callable[[float, float], float]
-) -> Tuple[csr_matrix, NDArray[np.float64]]:
+) -> Tuple[lil_matrix, NDArray[np.float64]]:
     """
     Assemble the global stiffness matrix and load vector from all triangular elements.
 
     Parameters
     ----------
     knots : (n_knots, 2) array of floats
-        Coordinates of all knots.
+        Coordinates of all knots with x,y value per column.
 
     elements : (n_elements, 3) array of ints
-        Indices of knots forming each triangular element.
+        Indices of knots forming each triangular element. Each triangle is formed by 3 points. Each row describes one element.
 
     alpha1, alpha2, beta, rhs : callable
         Functions of (x, y) returning scalars.
@@ -167,7 +195,6 @@ def assemble_global_system(
     global_load : (n_knots,) array of floats
         The assembled global load vector.
     """
-
     # Validate types and shapes
     if not isinstance(knots, np.ndarray):
         raise TypeError(f"'knots' must be a numpy ndarray, got {type(knots)}")
@@ -176,38 +203,35 @@ def assemble_global_system(
     if knots.dtype not in [np.float32, np.float64]:
         raise TypeError(f"'knots' array must have dtype float32 or float64, got {knots.dtype}")
 
+    # create global system matrices
     n_knots = knots.shape[0]
-    n_elements = elements.shape[0]
-
-    # Sparse matrix in LIL format for efficient incremental assembly
-    global_stiffness = lil_matrix((n_knots, n_knots), dtype=np.float64)
+    global_stiffness = lil_matrix((n_knots, n_knots), dtype=np.float64) # LIL format for efficient incremental assembly
     global_load = np.zeros(n_knots, dtype=np.float64)
 
-    for elem_idx in range(n_elements):
-        element = elements[elem_idx]
-
-        if element.size != 3:
-            raise ValueError(f"Element at index {elem_idx} does not have exactly 3 knots.")
-
+    # Loop over all elements and assemble global system
+    for element in elements: 
         local_stiffness, local_load = _calculate_local_stiffness(knots, element, alpha1, alpha2, beta, rhs)
 
-        # Efficiently add contributions to global matrix and vector
-        for local_i, global_i in enumerate(element):
-            global_load[global_i] += local_load[local_i]
+        # add contributions to global matrix and vector
+        global_load[element] += local_load
+        # np.ix_(element, element) creates a 3x3 index mesh to target the global submatrix
+        global_stiffness[np.ix_(element, element)] += local_stiffness
+        
+    # Convert to CSR format for efficient solver use
+    return global_stiffness, global_load
 
-            for local_j, global_j in enumerate(element):
-                global_stiffness[global_i, global_j] += local_stiffness[local_i, local_j]
 
-    # Convert to CSR format for efficient arithmetic and solver use
-    return global_stiffness.tocsr(), global_load
+# _____________________________________________________________________________
+# Boundary Conditions
+
 
 def insert_dirichlet_values(
     knots: NDArray[np.float64],
     boundary_indices: NDArray[np.int_],
     boundary_func: Callable[[float, float], float],
-    stiffness_matrix: Union[np.ndarray, csr_matrix],
+    stiffness_matrix: lil_matrix,
     load_vector: NDArray[np.float64]
-) -> Tuple[Union[np.ndarray, csr_matrix], NDArray[np.float64]]:
+) -> Tuple[csr_array, NDArray[np.float64]]:
     """
     Apply Dirichlet boundary conditions by modifying the stiffness matrix and load vector.
 
@@ -224,8 +248,7 @@ def insert_dirichlet_values(
     reduced_matrix : matrix with boundary rows/cols removed
     reduced_rhs : adjusted load vector
     """
-
-    # --- Validate inputs ---
+    # Validate types and shapes
     if not isinstance(knots, np.ndarray):
         raise TypeError("'knots' must be a numpy array.")
     if knots.ndim != 2 or knots.shape[1] != 2:
@@ -251,37 +274,54 @@ def insert_dirichlet_values(
         raise ValueError("Stiffness matrix must be square.")
     if stiffness_matrix.shape[0] != knots.shape[0]:
         raise ValueError("Stiffness matrix size must match number of knots.")
-    x_b = knots[boundary_indices][:, 0]
-    y_b = knots[boundary_indices][:, 1]
-    g_b = boundary_func(x_b, y_b)
+    
+    for index in boundary_indices:
+        x,y = knots[index]
+        solution = boundary_func(x, y)
 
-    rhs = load_vector.copy()
+        stiffness_matrix.rows[index] = [index]
+        stiffness_matrix.data[index] = [float(1)]
 
-    # --- Modify RHS using Dirichlet values ---
-    for i, idx in enumerate(boundary_indices):
-        col = stiffness_matrix[:, idx]
-        if isspmatrix(col):
-            col = col.toarray().ravel()
-        else:
-            col = np.asarray(col).ravel()
+        load_vector[index] = solution
 
-        rhs -= col * g_b[i]
+    return stiffness_matrix.tocsr(), load_vector
+    
+    # x_b = knots[boundary_indices][:, 0]
+    # y_b = knots[boundary_indices][:, 1]
+    # g_b = boundary_func(x_b, y_b)
 
-    # --- Remove Dirichlet DOFs ---
-    keep = np.setdiff1d(np.arange(stiffness_matrix.shape[0]), boundary_indices)
+    # rhs = load_vector.copy()
 
-    if isspmatrix(stiffness_matrix):
-        stiffness_matrix = stiffness_matrix.tocsr()
-        reduced_matrix = stiffness_matrix[keep][:, keep]
-    else:
-        reduced_matrix = stiffness_matrix[np.ix_(keep, keep)]
+    # # --- Modify RHS using Dirichlet values ---
+    # for i, idx in enumerate(boundary_indices):
+    #     col = stiffness_matrix[:, idx]
+    #     if isspmatrix(col):
+    #         col = col.toarray().ravel()
+    #     else:
+    #         col = np.asarray(col).ravel()
 
-    reduced_rhs = rhs[keep]
+    #     rhs -= col * g_b[i]
 
-    return reduced_matrix, reduced_rhs
+    # # --- Remove Dirichlet DOFs ---
+    # keep = np.setdiff1d(np.arange(stiffness_matrix.shape[0]), boundary_indices)
+
+    # if isspmatrix(stiffness_matrix):
+    #     stiffness_matrix = stiffness_matrix.tocsr()
+    #     reduced_matrix = stiffness_matrix[keep][:, keep]
+    # else:
+    #     reduced_matrix = stiffness_matrix[np.ix_(keep, keep)]
+
+    # reduced_rhs = rhs[keep]
+
+    # return reduced_matrix, reduced_rhs
+
+
+# _____________________________________________________________________________
+# Solving
+
 
 def solve_fem_system(
-    stiffness_matrix: Union[np.ndarray, csr_matrix],
+    stiffness_matrix: csr_array,
     load_vector: NDArray[np.float64]
 ) -> NDArray[np.float64]:
     """
@@ -304,24 +344,24 @@ def solve_fem_system(
         return np.linalg.solve(stiffness_matrix, load_vector)
     
 
-def add_known_boundary_values(knots, solutions_vector, boundary_incides, boundary_func):
-    result_indices = []
-    results = np.zeros(len(knots))
+# def add_known_boundary_values(knots, solutions_vector, boundary_incides, boundary_func):
+#     result_indices = []
+#     results = np.zeros(len(knots))
 
-    for index in boundary_incides:
-        results[index] = boundary_func(*knots[index])
-        result_indices.append(index)
+#     for index in boundary_incides:
+#         results[index] = boundary_func(*knots[index])
+#         result_indices.append(index)
 
-    result_indices = np.array(result_indices)
-    results = np.array(results).reshape(-1, 1)  # Ensure column shape
+#     result_indices = np.array(result_indices)
+#     results = np.array(results).reshape(-1, 1)  # Ensure column shape
 
-    kept_indices = np.setdiff1d(np.arange(len(knots)), result_indices)
+#     kept_indices = np.setdiff1d(np.arange(len(knots)), result_indices)
 
-    full_solution = np.full((len(knots), 1), np.nan)
-    full_solution[kept_indices] = solutions_vector.reshape(-1, 1)
-    full_solution[result_indices] = results[result_indices].reshape(-1, 1)
+#     full_solution = np.full((len(knots), 1), np.nan)
+#     full_solution[kept_indices] = solutions_vector.reshape(-1, 1)
+#     full_solution[result_indices] = results[result_indices].reshape(-1, 1)
 
-    return full_solution
+#     return full_solution
 
 def _create_solution_df(nodes: np.ndarray, solution: np.ndarray) -> pd.DataFrame:
     """
@@ -336,7 +376,7 @@ def _create_solution_df(nodes: np.ndarray, solution: np.ndarray) -> pd.DataFrame
     -------
     DataFrame with columns ['x', 'y', 'Phi']
     """
-    if solution.ndim == 2 and solution.shape[1] == 1:
+    if solution.ndim == 2 and solution.shape[1] == 1:   
         solution = solution.ravel()
 
     return pd.DataFrame({
@@ -344,6 +384,11 @@ def _create_solution_df(nodes: np.ndarray, solution: np.ndarray) -> pd.DataFrame
         "y": nodes[:, 1],
         "Phi": solution
     })
+
+
+# _____________________________________________________________________________
+# Show Results
+
 
 def compare_results_2d(nodes: np.ndarray, solutions_file: str, own_solution: np.ndarray):
     """
