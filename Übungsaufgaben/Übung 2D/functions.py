@@ -152,9 +152,9 @@ def _calculate_local_stiffness(
     ])
 
     # Area of the triangle element
-    area = ( c[1] * b[0] - c[0] * b[1] ) / 2    
-    if area <= 0:
-        raise ValueError(f"Computed triangle area is non-positive: ({area}). Check knot ordering.")
+    area = np.abs( ( c[1] * b[0] - c[0] * b[1] ) / 2 )
+    # if area <= 0:
+    #     raise ValueError(f"Computed triangle area is non-positive: ({area}). Check knot ordering.")
     
     centroid = _get_centroid(knots[element])
     
@@ -244,10 +244,10 @@ def assemble_global_system(
 
 def insert_dirichlet_values(
     knots: NDArray[np.float64],
+    stiffness_matrix: sp.lil_array,
+    load_vector: NDArray[np.float64],
     dirichlet_indices: NDArray[np.int_],
     dirichlet: Callable[[float, float], float],
-    stiffness_matrix: sp.lil_array,
-    load_vector: NDArray[np.float64]
 ) -> Tuple[sp.lil_array, NDArray[np.float64]]:
     """
     Apply Dirichlet boundary conditions by modifying the stiffness matrix and load vector.
@@ -264,6 +264,10 @@ def insert_dirichlet_values(
     -------
     reduced_matrix : matrix with boundary rows/cols removed
     reduced_rhs : adjusted load vector
+
+    Note
+    -----
+    ! This function has to be called AFTER inserting the robin boundary condition !
     """
     # Validate types and shapes
     if not isinstance(knots, np.ndarray):
@@ -313,7 +317,7 @@ def insert_robin_values(
     stiffness_matrix: sp.lil_array,
     load_vector: np.ndarray,
     robin_indices: NDArray[np.int_],
-    robin_rho: Callable[[float, float], float],
+    robin_gamma: Callable[[float, float], float],
     robin_rhs: Callable[[float, float], float],
 ):
     """
@@ -325,7 +329,7 @@ def insert_robin_values(
     stiffness_matrix : (n, n) LIL sparse matrix to modify
     load_vector : (n,) vector to modify
     robin_indices : list of [i, j] index pairs defining line segments on boundary
-    robin_rho : function rho(x, y) multiplying Φ in Robin condition
+    robin_gamma : function rho(x, y) multiplying Φ in Robin condition
     robin_rhs : function f(x, y) on the boundary
     """
     # Check Type
@@ -338,19 +342,20 @@ def insert_robin_values(
     ])
     B = np.array([1,1])
 
+    
     for segment in robin_indices:
-        i, j = segment
-        p1 = knots[i]
-        p2 = knots[j]
-
-        # Edge length
-        edge_vector = p2 - p1
-        length = np.linalg.norm(edge_vector)
+        length = np.linalg.norm(knots[segment[1]] - knots[segment[0]])
 
         centroid = _get_centroid(knots[segment])
 
-        stiffness_matrix[segment] += length / 6 * robin_rho(*centroid) * A
-        load_vector[segment[0]] += 0.5 * length * robin_rhs(*centroid) * B
+        # ! There is an issue
+        stiffness_matrix[np.ix_(segment, segment)] += length / 6 * robin_gamma(*centroid) * A
+        # value = length / 6 * robin_gamma(*centroid)
+        # for i_local, i_global in enumerate(segment):
+        #     for j_local, j_global in enumerate(segment):
+        #         stiffness_matrix[i_global, j_global] += value * A[i_local, j_local]
+
+        load_vector[segment] += 0.5 * length * robin_rhs(*centroid) * B
 
 
     return stiffness_matrix, load_vector
@@ -378,12 +383,12 @@ def solve_system(
     -------
     solution_vector: Dataframe with columns ['x', 'y', 'Phi']
     """
-    stiffness_matrix.tocsr()
-
+    
     if stiffness_matrix.shape[0] != load_vector.shape[0]:
         raise ValueError("Shape mismatch: stiffness_matrix and load_vector")
 
-    solution_vector = spsolve(stiffness_matrix, load_vector)
+    stiffness_matrix_csr = stiffness_matrix.tocsr()
+    solution_vector = spsolve(stiffness_matrix_csr, load_vector)
 
     return pd.DataFrame({
         "x" : knots[:,0],
@@ -392,12 +397,13 @@ def solve_system(
     })
 
 
-def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, levels = 2):
+def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, levels = 2, knots=None):
 
     OUTPUT_FOLDER = "images"
     filename_mesh = os.path.join(OUTPUT_FOLDER, "mesh.png")
     filename_solution = os.path.join(OUTPUT_FOLDER, "solution.png")
     filename_error = os.path.join(OUTPUT_FOLDER, "error.png")
+    filename_error_plot = os.path.join(OUTPUT_FOLDER, "error_plot.png")
 
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
@@ -406,8 +412,9 @@ def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, l
     # Show Elements Mesh
     plt.figure(figsize=(8, 6))
     plt.triplot(triangulation, linewidth=0.5)
+    # plt.scatter(solution["x"], solution["y"], s=0.1, color="orange")
     plt.title(f"Mesh Structure with {len(elements)} Elements")
-    plt.axis("equal")
+    # plt.axis("equal")
     plt.tight_layout()
     plt.savefig(filename_mesh, dpi=300)
     plt.show()
@@ -416,6 +423,7 @@ def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, l
     plt.figure(figsize=(8, 6))
     contour = plt.tricontourf(triangulation, solution["Phi"], cmap="viridis", levels=levels)
     plt.colorbar(contour, label=r"$\Phi$")
+    plt.scatter(solution["x"], solution["y"], s=0.1, color="red")
     plt.title(f"Computed 2D FEM Solution with {len(solution)} nodes")
     plt.xlabel("x")
     plt.ylabel("y")
@@ -429,11 +437,22 @@ def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, l
         return
     theoretical = np.loadtxt(theoretical_filename)
     error = theoretical - solution["Phi"]
+    plt.figure(figsize=(8, 6))
     plt.plot(np.arange(len(error)), error)
-    plt.title("Absolute Error")
+    plt.title("Solution Error for each Node")
     plt.xlabel("Index")
-    plt.ylabel("Error per Node")
+    plt.ylabel("Error")
     plt.tight_layout()
     plt.savefig(filename_error, dpi=300)
     plt.show()
 
+    plt.figure(figsize=(8, 6))
+    contour = plt.tricontourf(triangulation, error, cmap="viridis", levels=levels)
+    plt.colorbar(contour, label=r"Error")
+    plt.scatter(solution["x"], solution["y"], s=0.1, color="red")
+    plt.title("Solution Error")
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.tight_layout()
+    plt.savefig(filename_error_plot, dpi=300)
+    plt.show()

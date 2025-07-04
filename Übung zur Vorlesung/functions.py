@@ -36,6 +36,12 @@ sns.set_theme()
 # Helpers
 
 
+def _get_centroid(arr):
+    """returns (x_c, y_c)"""
+
+    return np.mean(arr, axis=0)
+
+
 def get_number_of_elements(elements: np.ndarray) -> int:
     """Returns the number of elements in the list"""
     return len(elements)
@@ -146,11 +152,13 @@ def _calculate_local_stiffness(
     ])
 
     # Area of the triangle element
-    area = ( c[1] * b[0] - c[0] * b[1] ) / 2    
-    if area <= 0:
-        raise ValueError(f"Computed triangle area is non-positive: ({area}). Check knot ordering.")
+    area = np.abs( ( c[1] * b[0] - c[0] * b[1] ) / 2 )
+    # if area <= 0:
+    #     raise ValueError(f"Computed triangle area is non-positive: ({area}). Check knot ordering.")
     
-    centroid = np.mean(knots[element], axis=0)   # returns (x_c, y_c)
+    centroid = _get_centroid(knots[element])
+    
+    # centroid = np.mean(knots[element], axis=0)
 
     # compute local matrices (coefficients) for the element
     B = np.outer(b, b) # outer product
@@ -182,7 +190,7 @@ def assemble_global_system(
     alpha2: Callable[[float, float], float],
     beta: Callable[[float, float], float],
     rhs: Callable[[float, float], float]
-) -> Tuple[sp.lil_matrix, NDArray[np.float64]]:
+) -> Tuple[sp.lil_array, NDArray[np.float64]]:
     """
     Assemble the global stiffness matrix and load vector from all triangular elements.
 
@@ -215,7 +223,7 @@ def assemble_global_system(
 
     # create global system
     n_knots = knots.shape[0]
-    global_stiffness = sp.lil_matrix((n_knots, n_knots), dtype=np.float64) # LIL format for efficient incremental assembly
+    global_stiffness = sp.lil_array((n_knots, n_knots), dtype=np.float64) # LIL format for efficient incremental assembly
     global_load = np.zeros(n_knots, dtype=np.float64)
 
     for element in elements: 
@@ -236,19 +244,19 @@ def assemble_global_system(
 
 def insert_dirichlet_values(
     knots: NDArray[np.float64],
-    boundary_indices: NDArray[np.int_],
-    boundary_func: Callable[[float, float], float],
-    stiffness_matrix: sp.lil_matrix,
-    load_vector: NDArray[np.float64]
-) -> Tuple[sp.csr_array, NDArray[np.float64]]:
+    stiffness_matrix: sp.lil_array,
+    load_vector: NDArray[np.float64],
+    dirichlet_indices: NDArray[np.int_],
+    dirichlet: Callable[[float, float], float],
+) -> Tuple[sp.lil_array, NDArray[np.float64]]:
     """
     Apply Dirichlet boundary conditions by modifying the stiffness matrix and load vector.
 
     Parameters
     ----------
     knots : (n_knots, 2) float array
-    boundary_indices : (n_b,) int array
-    boundary_func : (x: float, y: float) -> float
+    dirichlet_indices : (n_b,) int array. list of indices from the knots variable where the dirichlet func is appropiate.
+    dirichlet : (x: float, y: float) -> float
     stiffness_matrix : dense or sparse matrix
     load_vector : (n,) array
 
@@ -256,6 +264,10 @@ def insert_dirichlet_values(
     -------
     reduced_matrix : matrix with boundary rows/cols removed
     reduced_rhs : adjusted load vector
+
+    Note
+    -----
+    ! This function has to be called AFTER inserting the robin boundary condition !
     """
     # Validate types and shapes
     if not isinstance(knots, np.ndarray):
@@ -265,13 +277,13 @@ def insert_dirichlet_values(
     if not np.issubdtype(knots.dtype, np.floating):
         raise TypeError(f"'knots' must have float dtype, got {knots.dtype}.")
 
-    if not isinstance(boundary_indices, np.ndarray):
-        raise TypeError("'boundary_indices' must be a numpy array.")
-    if boundary_indices.ndim != 1:
-        raise ValueError("'boundary_indices' must be a 1D array.")
-    if not np.issubdtype(boundary_indices.dtype, np.integer):
-        raise TypeError("'boundary_indices' must contain integers.")
-    if np.any(boundary_indices < 0) or np.any(boundary_indices >= knots.shape[0]):
+    if not isinstance(dirichlet_indices, np.ndarray):
+        raise TypeError("'dirichlet_indices' must be a numpy array.")
+    if dirichlet_indices.ndim != 1:
+        raise ValueError("'dirichlet_indices' must be a 1D array.")
+    if not np.issubdtype(dirichlet_indices.dtype, np.integer):
+        raise TypeError("'dirichlet_indices' must contain integers.")
+    if np.any(dirichlet_indices < 0) or np.any(dirichlet_indices >= knots.shape[0]):
         raise ValueError("Some boundary indices are out of bounds.")
 
     if load_vector.ndim != 1:
@@ -286,9 +298,9 @@ def insert_dirichlet_values(
     
     # overwrite matrices at the indices of the known solutions
     # 1 * solution_i = load_i with load_i being the calculated solution.
-    for index in boundary_indices:
+    for index in dirichlet_indices:
         x,y = knots[index]
-        solution = boundary_func(x, y)
+        solution = dirichlet(x, y)
 
         # stiffness matrix at i,i is 1
         stiffness_matrix.rows[index] = [index]
@@ -297,28 +309,57 @@ def insert_dirichlet_values(
         # overwrite right hand side with solution.
         load_vector[index] = solution
 
-    return stiffness_matrix.tocsr(), load_vector
+    return stiffness_matrix, load_vector
     
-    # x_b = knots[boundary_indices][:, 0]
-    # y_b = knots[boundary_indices][:, 1]
-    # g_b = boundary_func(x_b, y_b)
 
-    # rhs = load_vector.copy()
+def insert_robin_values(
+    knots: np.ndarray,
+    stiffness_matrix: sp.lil_array,
+    load_vector: np.ndarray,
+    robin_indices: NDArray[np.int_],
+    robin_gamma: Callable[[float, float], float],
+    robin_rhs: Callable[[float, float], float],
+):
+    """
+    Inserts Robin boundary condition contributions into the global system.
 
-    # # Modify RHS using Dirichlet values
-    # for i, idx in enumerate(boundary_indices):
-    #     col = stiffness_matrix[:, idx]
-        # col = col.toarray().ravel()
+    Parameters
+    ----------
+    knots : (n, 2) array of node coordinates
+    stiffness_matrix : (n, n) LIL sparse matrix to modify
+    load_vector : (n,) vector to modify
+    robin_indices : list of [i, j] index pairs defining line segments on boundary
+    robin_gamma : function rho(x, y) multiplying Φ in Robin condition
+    robin_rhs : function f(x, y) on the boundary
+    """
+    # Check Type
+    if not np.issubdtype(robin_indices.dtype, np.integer):
+        raise TypeError(f"'robin_indices' must have int dtype, got {robin_indices.dtype}.")
 
-    #     rhs -= col * g_b[i]
+    A = np.array([
+        [2, 1],
+        [1,2]
+    ])
+    B = np.array([1,1])
 
-    # # Remove Dirichlet rows and columns
-    # keep = np.setdiff1d(np.arange(stiffness_matrix.shape[0]), boundary_indices)
-    # stiffness_matrix = stiffness_matrix.tocsr()
-    # reduced_matrix = stiffness_matrix[keep][:, keep]
-    # reduced_rhs = rhs[keep]
+    
+    for segment in robin_indices:
+        length = np.linalg.norm(knots[segment[1]] - knots[segment[0]])
 
-    # return reduced_matrix, reduced_rhs
+        centroid = _get_centroid(knots[segment])
+
+        # ! There is an issue
+        stiffness_matrix[np.ix_(segment, segment)] += length / 6 * robin_gamma(*centroid) * A
+        # value = length / 6 * robin_gamma(*centroid)
+        # for i_local, i_global in enumerate(segment):
+        #     for j_local, j_global in enumerate(segment):
+        #         stiffness_matrix[i_global, j_global] += value * A[i_local, j_local]
+
+        load_vector[segment] += 0.5 * length * robin_rhs(*centroid) * B
+
+
+    return stiffness_matrix, load_vector
+        
 
 
 # _____________________________________________________________________________
@@ -327,7 +368,7 @@ def insert_dirichlet_values(
 
 def solve_system(
     knots,
-    stiffness_matrix: sp.csr_array,
+    stiffness_matrix: sp.lil_array,
     load_vector: NDArray[np.float64]
 ) -> pd.DataFrame:
     """
@@ -342,10 +383,12 @@ def solve_system(
     -------
     solution_vector: Dataframe with columns ['x', 'y', 'Phi']
     """
+    
     if stiffness_matrix.shape[0] != load_vector.shape[0]:
         raise ValueError("Shape mismatch: stiffness_matrix and load_vector")
 
-    solution_vector = spsolve(stiffness_matrix, load_vector)
+    stiffness_matrix_csr = stiffness_matrix.tocsr()
+    solution_vector = spsolve(stiffness_matrix_csr, load_vector)
 
     return pd.DataFrame({
         "x" : knots[:,0],
@@ -357,26 +400,29 @@ def solve_system(
 def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, levels = 2):
 
     OUTPUT_FOLDER = "images"
+    filename_mesh = os.path.join(OUTPUT_FOLDER, "mesh.png")
     filename_solution = os.path.join(OUTPUT_FOLDER, "solution.png")
     filename_error = os.path.join(OUTPUT_FOLDER, "error.png")
+    filename_error_plot = os.path.join(OUTPUT_FOLDER, "error_plot.png")
 
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
     triangulation = mpl.tri.Triangulation(solution["x"], solution["y"], triangles=elements)
 
-    # SHow Elements Mesh
+    # Show Elements Mesh
     plt.figure(figsize=(8, 6))
     plt.triplot(triangulation, linewidth=0.5)
     plt.title(f"Mesh Structure with {len(elements)} Elements")
     plt.axis("equal")
     plt.tight_layout()
+    plt.savefig(filename_mesh, dpi=300)
     plt.show()
 
     # Show Solution
     plt.figure(figsize=(8, 6))
     contour = plt.tricontourf(triangulation, solution["Phi"], cmap="viridis", levels=levels)
     plt.colorbar(contour, label=r"$\Phi$")
-    plt.title(f"Computed 2D FEM Solution ({len(solution)} nodes)")
+    plt.title(f"Computed 2D FEM Solution with {len(solution)} nodes")
     plt.xlabel("x")
     plt.ylabel("y")
     plt.axis("equal")
@@ -389,30 +435,24 @@ def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, l
         return
     theoretical = np.loadtxt(theoretical_filename)
     error = theoretical - solution["Phi"]
+    plt.figure(figsize=(8, 6))
     plt.plot(np.arange(len(error)), error)
-    plt.title("Absolute Error")
+    plt.title("Solution Error for each Node")
     plt.xlabel("Index")
-    plt.ylabel("Error per Node")
+    plt.ylabel("Error")
     plt.tight_layout()
     plt.savefig(filename_error, dpi=300)
     plt.show()
 
+    plt.figure(figsize=(8, 6))
+    contour = plt.tricontourf(triangulation, error, cmap="viridis", levels=levels)
+    plt.colorbar(contour, label=r"Error")
+    plt.title("Solution Error")
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.tight_layout()
+    plt.savefig(filename_error_plot, dpi=300)
+    plt.show()
 
-# def add_known_boundary_values(knots, solutions_vector, boundary_incides, boundary_func):
-#     result_indices = []
-#     results = np.zeros(len(knots))
+    print(error)
 
-#     for index in boundary_incides:
-#         results[index] = boundary_func(*knots[index])
-#         result_indices.append(index)
-
-#     result_indices = np.array(result_indices)
-#     results = np.array(results).reshape(-1, 1)  # Ensure column shape
-
-#     kept_indices = np.setdiff1d(np.arange(len(knots)), result_indices)
-
-#     full_solution = np.full((len(knots), 1), np.nan)
-#     full_solution[kept_indices] = solutions_vector.reshape(-1, 1)
-#     full_solution[result_indices] = results[result_indices].reshape(-1, 1)
-
-#     return full_solution
