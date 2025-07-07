@@ -397,7 +397,7 @@ def solve_system(
     })
 
 
-def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, levels = 2, knots=None):
+def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, levels = 2, show_knots=False):
 
     OUTPUT_FOLDER = "images"
     filename_mesh = os.path.join(OUTPUT_FOLDER, "mesh.png")
@@ -423,8 +423,11 @@ def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, l
     plt.figure(figsize=(8, 6))
     contour = plt.tricontourf(triangulation, solution["Phi"], cmap="viridis", levels=levels)
     plt.colorbar(contour, label=r"$\Phi$")
-    plt.scatter(solution["x"], solution["y"], s=0.1, color="red")
-    plt.title(f"Computed 2D FEM Solution with {len(solution)} nodes")
+
+    if show_knots:
+        plt.scatter(solution["x"], solution["y"], s=0.1, color="red")
+    
+    plt.title(f"Computed 2D FEM Solution with {len(solution)} nodes and {levels} color levels")
     plt.xlabel("x")
     plt.ylabel("y")
     plt.axis("equal")
@@ -449,7 +452,10 @@ def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, l
     plt.figure(figsize=(8, 6))
     contour = plt.tricontourf(triangulation, error, cmap="viridis", levels=levels)
     plt.colorbar(contour, label=r"Error")
-    plt.scatter(solution["x"], solution["y"], s=0.1, color="red")
+
+    if show_knots:
+        plt.scatter(solution["x"], solution["y"], s=0.1, color="red")
+
     plt.title("Solution Error")
     plt.xlabel("x")
     plt.ylabel("y")

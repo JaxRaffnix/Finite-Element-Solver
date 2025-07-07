@@ -12,7 +12,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from collections import Counter
 #import mayavi.mlab as mal
 
-print("Test")
+# print("Test")
 
 
 def RefineMeshElements(poi,tri,uu,n=1):
