@@ -29,7 +29,7 @@ import seaborn as sns
 from numpy.typing import NDArray
 from typing import Callable, Tuple, Union
 
-sns.set_theme()
+sns.set_theme(style="white")
 
 
 # _____________________________________________________________________________
@@ -55,32 +55,46 @@ def plot_knots_elements(knots: np.ndarray, elements=None, ax=None):
     - knots: Array of shape (n, 2), each row contains one knot. First column is x-coordinates, second column is y-coordinates.
     - elements: Array of shape (m, 3), each row describes one triangle element. First column is the index of the first knot, next column is the index of the second knot, and the last column is the index of the third knot.
     """
+    LINEWIDTH = 0.4
+    POINT_SIZE = 12  # size of knot markers
+    TRIANGLE_COLOR = sns.color_palette("muted")[2]  # e.g., desaturated blue
+    KNOT_COLOR = sns.color_palette("dark")[0]       # e.g., dark green
+
     if ax is None:
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(6, 6))
 
     # make x and y axes equal length
     ax.set_aspect('equal', adjustable='box')
 
-    # plot the knots
-    ax.scatter(knots[:,0], knots[:,1])
-
-    # highlight the start position
-    ax.plot(knots[0,0], knots[0,1], color="green")
-
-    if elements is None or len(elements) == 0:
-        plt.show()
-        print("No triangle elements to plot.")
-        return
-
     # plot each triangle element
-    for i, element in enumerate(elements):
-        triangle_coordinates = knots[element]
-        polygon = mpl.patches.Polygon(triangle_coordinates, closed=True, fill=False)    # create triangle from 3 points
-        plt.gca().add_patch(polygon)        # plot the triangles
-        centroid = np.mean(triangle_coordinates, axis=0)    # x, y
-        plt.text(centroid[0], centroid[1], f"Tri {i}")
+    if elements is not None and len(elements) > 0:
+        for element in elements:
+            triangle_coordinates = knots[element]
+            polygon = mpl.patches.Polygon(
+                triangle_coordinates, 
+                closed=True, fill=False, 
+                linewidth=LINEWIDTH, 
+                facecolor=TRIANGLE_COLOR,
+                edgecolor="black",
+                alpha=0.5
+            )    # create triangle from 3 points
+            ax.add_patch(polygon)        # plot the triangles
 
-    plt.show()
+    # plot the knots
+    ax.scatter(
+        knots[:,0], knots[:,1], 
+        s=POINT_SIZE, 
+        color=KNOT_COLOR,
+        edgecolor='white',
+        linewidth=0.3,
+    )
+
+    # ax.set_axis_off()       # Hide ticks
+    # sns.despine(ax=ax)      # Remove top/right spines (in case axis shown)
+
+    if ax is None:
+        plt.tight_layout()
+        plt.show()
 
 
 # _____________________________________________________________________________

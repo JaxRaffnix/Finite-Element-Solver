@@ -1,5 +1,9 @@
 # FEM 2D Learnings
 
+## Offene Fragen
+
+- wiew funktioniert der Refine Mesh, was ist der input `area`?
+
 ## Meshtools
 
 ### Connect Multiple Segments to one single Polygon
