@@ -37,7 +37,7 @@ sns.set_theme(style="white")
 
 
 def _get_centroid(arr):
-    """returns (x_c, y_c)"""
+    """returns (x_c, y_c). arr is of type [[x0, x1, x2, ...], [y0, y1, y2, ...]]"""
 
     return np.mean(arr, axis=0)
 
@@ -47,7 +47,7 @@ def get_number_of_elements(elements: np.ndarray) -> int:
     return len(elements)
 
 
-def plot_knots_elements(knots: np.ndarray, elements=None, ax=None):
+def plot_knots_elements(knots: np.ndarray, elements=None, ax=None, x_label="x", y_label="y", title_suffix=None):
     """
     Plots the net and the elements defined in it.
 
@@ -64,7 +64,7 @@ def plot_knots_elements(knots: np.ndarray, elements=None, ax=None):
         fig, ax = plt.subplots(figsize=(6, 6))
 
     # make x and y axes equal length
-    ax.set_aspect('equal', adjustable='box')
+    # ax.set_aspect('equal', adjustable='box')
 
     # plot each triangle element
     if elements is not None and len(elements) > 0:
@@ -89,8 +89,9 @@ def plot_knots_elements(knots: np.ndarray, elements=None, ax=None):
         linewidth=0.3,
     )
 
-    # ax.set_axis_off()       # Hide ticks
-    # sns.despine(ax=ax)      # Remove top/right spines (in case axis shown)
+    ax.set_title(f"Generated 2D Mesh with {len(knots)} nodes {title_suffix}")
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
 
     if ax is None:
         plt.tight_layout()
