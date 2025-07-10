@@ -4,6 +4,15 @@
 
 - wiew funktioniert der Refine Mesh, was ist der input `area`?
 
+## Allgemeine Tipps
+
+Hinzufügen der functions Datei aus top level dir:
+```
+# make top level dir available
+import sys
+sys.path.append("../../")
+```
+
 ## Meshtools
 
 ### Connect Multiple Segments to one single Polygon
