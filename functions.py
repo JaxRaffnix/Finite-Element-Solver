@@ -227,6 +227,10 @@ def assemble_global_system(
 
     global_load : (n_knots,) array of floats
         The assembled global load vector.
+
+    Note
+    ----
+    - the elemnt indices list has to of type int!
     """
     # Validate types and shapes
     if not isinstance(knots, np.ndarray):
@@ -262,7 +266,7 @@ def insert_dirichlet_values(
     stiffness_matrix: sp.lil_array,
     load_vector: NDArray[np.float64],
     dirichlet_indices: NDArray[np.int_],
-    dirichlet: Callable[[float, float], float],
+    dirichlet_func: Callable[[float, float], float],
 ) -> Tuple[sp.lil_array, NDArray[np.float64]]:
     """
     Apply Dirichlet boundary conditions by modifying the stiffness matrix and load vector.
@@ -270,7 +274,7 @@ def insert_dirichlet_values(
     Parameters
     ----------
     knots : (n_knots, 2) float array
-    dirichlet_indices : (n_b,) int array. list of indices from the knots variable where the dirichlet func is appropiate.
+    dirichlet_indices : (n_b,) int array. list of indices from the knots variable where the dirichlet func is appropiate. The order (eg. clockwise, anticlockwise) is important.
     dirichlet : (x: float, y: float) -> float
     stiffness_matrix : dense or sparse matrix
     load_vector : (n,) array
@@ -282,6 +286,8 @@ def insert_dirichlet_values(
 
     Note
     -----
+    - The order of the dirichlet node indices matters!
+    - make sure the indices list is of type int.
     ! This function has to be called AFTER inserting the robin boundary condition !
     """
     # Validate types and shapes
@@ -315,7 +321,7 @@ def insert_dirichlet_values(
     # 1 * solution_i = load_i with load_i being the calculated solution.
     for index in dirichlet_indices:
         x,y = knots[index]
-        solution = dirichlet(x, y)
+        solution = dirichlet_func(x, y)
 
         # stiffness matrix at i,i is 1
         stiffness_matrix.rows[index] = [index]
@@ -346,10 +352,42 @@ def insert_robin_values(
     robin_indices : list of [i, j] index pairs defining line segments on boundary
     robin_gamma : function rho(x, y) multiplying Φ in Robin condition
     robin_rhs : function f(x, y) on the boundary
+
+    Note
+    -----
+    - make sure the indices list is of type int.
+    ! This function has to be called BEFORE inserting the dirichlet boundary condition !
     """
-    # Check Type
+    # --- Type checks ---
+    if not isinstance(knots, np.ndarray):
+        raise TypeError("knots must be a NumPy array")
+    if not isinstance(stiffness_matrix, sp.lil_array):
+        raise TypeError("stiffness_matrix must be a scipy.sparse.lil_array")
+    if not isinstance(load_vector, np.ndarray):
+        raise TypeError("load_vector must be a NumPy array")
+    if not isinstance(robin_indices, np.ndarray):
+        raise TypeError("robin_indices must be a NumPy array")
     if not np.issubdtype(robin_indices.dtype, np.integer):
-        raise TypeError(f"'robin_indices' must have int dtype, got {robin_indices.dtype}.")
+        raise TypeError("robin_indices must contain integers")
+    if not callable(robin_gamma):
+        raise TypeError("robin_gamma must be callable")
+    if not callable(robin_rhs):
+        raise TypeError("robin_rhs must be callable")
+
+    # --- Shape checks ---
+    if knots.ndim != 2 or knots.shape[1] != 2:
+        raise ValueError("knots must be of shape (n, 2)")
+    n = knots.shape[0]
+    if load_vector.shape != (n,):
+        raise ValueError(f"load_vector must have shape ({n},)")
+    if stiffness_matrix.shape != (n, n):
+        raise ValueError(f"stiffness_matrix must have shape ({n}, {n})")
+    if robin_indices.ndim != 2 or robin_indices.shape[1] != 2:
+        raise ValueError("robin_indices must be of shape (m, 2)")
+    
+    # --- Optional: check that all indices are within bounds ---
+    if np.any(robin_indices < 0) or np.any(robin_indices >= n):
+        raise IndexError("robin_indices contain out-of-bound node indices")
 
     A = np.array([
         [2, 1],
@@ -414,6 +452,8 @@ def solve_system(
 
 def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, levels = 2, show_knots=False):
 
+    # TODO: Split the graphs, pass plt.axis and axis labels to the functions
+
     OUTPUT_FOLDER = "images"
     filename_mesh = os.path.join(OUTPUT_FOLDER, "mesh.png")
     filename_solution = os.path.join(OUTPUT_FOLDER, "solution.png")
@@ -424,16 +464,19 @@ def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, l
 
     triangulation = mpl.tri.Triangulation(solution["x"], solution["y"], triangles=elements)
 
+
+    #______________
     # Show Elements Mesh
     plt.figure(figsize=(8, 6))
     plt.triplot(triangulation, linewidth=0.5)
-    # plt.scatter(solution["x"], solution["y"], s=0.1, color="orange")
     plt.title(f"Mesh Structure with {len(elements)} Elements")
-    plt.gca().set_aspect('equal', adjustable='box')
+    # plt.gca().set_aspect('equal', adjustable='box')
     plt.tight_layout()
     plt.savefig(filename_mesh, dpi=300)
     plt.show()
 
+
+    #______________
     # Show Solution
     plt.figure(figsize=(8, 6))
     contour = plt.tricontourf(triangulation, solution["Phi"], cmap="viridis", levels=levels)
@@ -445,11 +488,13 @@ def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, l
     plt.title(f"Computed 2D FEM Solution with {len(solution)} nodes and {levels} color levels")
     plt.xlabel("x")
     plt.ylabel("y")
-    plt.gca().set_aspect('equal', adjustable='box')
+    # plt.gca().set_aspect('equal', adjustable='box')
     plt.tight_layout()
     plt.savefig(filename_solution, dpi=300)
     plt.show()
 
+    
+    #______________
     # Check against Theoretical
     if theoretical_filename is None:
         return

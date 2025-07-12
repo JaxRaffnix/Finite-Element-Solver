@@ -33,6 +33,8 @@ Wenn 2 Segmente auf-/nebeneinander liegen, muss eines der Segmente mit einem Off
 
 ` 1 < y < 10 ` is interpreted as `1 < y and y < 10`
 
+Die max area werte müssen klein genug sein, damit sich etwas ändert. z.b. `Edge_length / 100`
+
 ```python
 def refine_mesh(triangle, area):
     """
