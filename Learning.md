@@ -53,3 +53,16 @@ def refine_mesh(triangle, area):
 
     return bool(area > max_area)
 ```
+
+### Find Boundary Segments
+
+`ROBIN_INDICES[0]` enthält alle elemente des typs `TYPES_LIST[0]` zwischen `BOUNDARY_POINTS[0]` und `BOUNDARY_POINTS[1]`.
+
+`ROBIN_INDICES[1]` enthält alle elemente des typs `TYPES_LIST[1]` zwischen `BOUNDARY_POINTS[1]` und `BOUNDARY_POINTS[2]`.
+
+```python
+BOUNDARY_POINTS = [[0,-RA],[RA, 0],[0,RA]]
+TYPES_LIST = ["Segments", "Segments"]
+ROBIN_INDICES = mt.RetrieveSegments(nodes, boundary_edge, boundary_inidces,BOUNDARY_POINTS, TYPES_LIST)
+ROBIN_INDICES = ROBIN_INDICES = np.array(ROBIN_INDICES[0] + ROBIN_INDICES[1])
+```

@@ -171,9 +171,7 @@ def _calculate_local_stiffness(
     # if area <= 0:
     #     raise ValueError(f"Computed triangle area is non-positive: ({area}). Check knot ordering.")
     
-    centroid = _get_centroid(knots[element])
-    
-    # centroid = np.mean(knots[element], axis=0)
+    centroid = _get_centroid(knots[element])    # [x_M, y_M]
 
     # compute local matrices (coefficients) for the element
     B = np.outer(b, b) # outer product
@@ -184,7 +182,7 @@ def _calculate_local_stiffness(
         [1, 1, 2]
     ])
     stiffness_matrix = alpha1(*centroid) / (4 * area) * B  \
-                     + alpha2(*centroid) / (4 * area)  * C \
+                     + alpha2(*centroid) / (4 * area) * C \
                      + beta(*centroid) * area / 12 * D
 
     # compute local load (right hand side) vector 
@@ -401,12 +399,7 @@ def insert_robin_values(
 
         centroid = _get_centroid(knots[segment])
 
-        # ! There is an issue
         stiffness_matrix[np.ix_(segment, segment)] += length / 6 * robin_gamma(*centroid) * A
-        # value = length / 6 * robin_gamma(*centroid)
-        # for i_local, i_global in enumerate(segment):
-        #     for j_local, j_global in enumerate(segment):
-        #         stiffness_matrix[i_global, j_global] += value * A[i_local, j_local]
 
         load_vector[segment] += 0.5 * length * robin_rhs(*centroid) * B
 
