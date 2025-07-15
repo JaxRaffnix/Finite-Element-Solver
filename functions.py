@@ -11,11 +11,12 @@
 
 # system
 import os
+import warnings
 
 # vectorized data
 import numpy as np
 import scipy.sparse as sp
-from scipy.sparse.linalg import spsolve
+from scipy.sparse.linalg import spsolve, MatrixRankWarning
 
 # dataframes
 import pandas as pd
@@ -96,6 +97,18 @@ def plot_knots_elements(knots: np.ndarray, elements=None, ax=None, x_label="x", 
     if ax is None:
         plt.tight_layout()
         plt.show()
+
+
+def _estimate_missing_bc(stiffness_matrix):
+    """stiffness_matrix: sp.lil_array"""
+
+    print("Calculating missing constraints ...")
+    stiffness_matrix = stiffness_matrix.toarray()
+
+    rank = np.linalg.matrix_rank(stiffness_matrix)
+    total_dof = stiffness_matrix.shape[0]
+
+    return rank, total_dof
 
 
 # _____________________________________________________________________________
@@ -429,18 +442,27 @@ def solve_system(
     -------
     solution_vector: Dataframe with columns ['x', 'y', 'Phi']
     """
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("error", category=MatrixRankWarning)
+        try:
     
-    if stiffness_matrix.shape[0] != load_vector.shape[0]:
-        raise ValueError("Shape mismatch: stiffness_matrix and load_vector")
+            if stiffness_matrix.shape[0] != load_vector.shape[0]:
+                raise ValueError("Shape mismatch: stiffness_matrix and load_vector")
 
-    stiffness_matrix_csr = stiffness_matrix.tocsr()
-    solution_vector = spsolve(stiffness_matrix_csr, load_vector)
+            stiffness_matrix_csr = stiffness_matrix.tocsr()
+            solution_vector = spsolve(stiffness_matrix_csr, load_vector)
 
-    return pd.DataFrame({
-        "x" : knots[:,0],
-        "y" : knots[:,1],
-        "Phi" : solution_vector
-    })
+            return pd.DataFrame({
+                "x" : knots[:,0],
+                "y" : knots[:,1],
+                "Phi" : solution_vector
+            })
+        except MatrixRankWarning:
+            rank, total_dof = _estimate_missing_bc(stiffness_matrix)
+            raise RuntimeError(f"Stiffness matrix is singular! Rank is {rank}, but there are {total_dof - rank} missing constraints. Probably missing dirichlet boundary conditions.")
+        except Exception as e:
+            raise RuntimeError(f"FEM solver failed: {e}")
 
 
 # _____________________________________________________________________________
