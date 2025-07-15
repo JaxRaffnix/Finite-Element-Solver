@@ -27,7 +27,7 @@ import seaborn as sns
 
 # type hints
 from numpy.typing import NDArray
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Union, Optional
 
 sns.set_theme(style="white")
 
@@ -443,76 +443,138 @@ def solve_system(
     })
 
 
-def plot_result(elements, solution: pd.DataFrame, theoretical_filename = None, levels = 2, show_knots=False):
+# _____________________________________________________________________________
+# Plot Solution
 
-    # TODO: Split the graphs, pass plt.axis and axis labels to the functions
 
-    OUTPUT_FOLDER = "images"
-    filename_mesh = os.path.join(OUTPUT_FOLDER, "mesh.png")
-    filename_solution = os.path.join(OUTPUT_FOLDER, "solution.png")
-    filename_error = os.path.join(OUTPUT_FOLDER, "error.png")
-    filename_error_plot = os.path.join(OUTPUT_FOLDER, "error_plot.png")
+OUTPUT_FOLDER = "images"
 
-    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
+def plot_result(
+    elements: Union[np.ndarray, list],
+    solution: pd.DataFrame,
+    levels: int = 10,
+    ax: Optional[plt.Axes] = None,
+    suffix: Optional[str] = None
+) -> None:
+    """
+    Plots the 2D FEM solution as a filled contour plot.
+
+    Parameters
+    ----------
+    elements : array-like of shape (n_elements, 3)
+        Triangle connectivity array where each row contains indices of three vertices.
+
+    solution : pd.DataFrame
+        DataFrame with columns "x", "y", and "Phi", representing node coordinates and computed potential.
+
+    levels : int, optional
+        Number of contour levels to use in the filled contour plot. Default is 10.
+
+    ax : matplotlib.axes.Axes, optional
+        An existing axis to plot into. If None, a new figure will be created.
+    """
+    if not isinstance(solution, pd.DataFrame):
+        raise TypeError("solution must be a pandas DataFrame.")
+
+    required_columns = {"x", "y", "Phi"}
+    if not required_columns.issubset(solution.columns):
+        raise ValueError(f"solution must contain the columns: {required_columns}")
+
+    elements = np.asarray(elements)
     triangulation = mpl.tri.Triangulation(solution["x"], solution["y"], triangles=elements)
 
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 6))
 
-    #______________
-    # Show Elements Mesh
-    plt.figure(figsize=(8, 6))
-    plt.triplot(triangulation, linewidth=0.5)
-    plt.title(f"Mesh Structure with {len(elements)} Elements")
-    # plt.gca().set_aspect('equal', adjustable='box')
-    plt.tight_layout()
-    plt.savefig(filename_mesh, dpi=300)
-    plt.show()
+    contour = ax.tricontourf(triangulation, solution["Phi"], cmap="viridis", levels=levels)
+    plt.colorbar(contour, ax=ax, label=r"$\Phi$")
+    ax.set_title(f"Computed 2D FEM Solution with {len(solution)} nodes and {levels} color levels {suffix}")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    # ax.set_aspect('equal', adjustable='box')
 
-
-    #______________
-    # Show Solution
-    plt.figure(figsize=(8, 6))
-    contour = plt.tricontourf(triangulation, solution["Phi"], cmap="viridis", levels=levels)
-    plt.colorbar(contour, label=r"$\Phi$")
-
-    if show_knots:
-        plt.scatter(solution["x"], solution["y"], s=0.1, color="red")
-    
-    plt.title(f"Computed 2D FEM Solution with {len(solution)} nodes and {levels} color levels")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    # plt.gca().set_aspect('equal', adjustable='box')
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+    filename_solution = os.path.join(OUTPUT_FOLDER, "solution.png")
     plt.tight_layout()
     plt.savefig(filename_solution, dpi=300)
     plt.show()
 
-    
-    #______________
-    # Check against Theoretical
-    if theoretical_filename is None:
-        return
+
+def plot_comparison(
+    elements: Union[np.ndarray, list],
+    solution_df: pd.DataFrame,
+    theoretical_filename: str,
+    levels: int = 10,
+    # ax_line: Optional[plt.Axes] = None,
+    ax: Optional[plt.Axes] = None,
+) -> None:
+    """
+    Plots the node-wise error between numerical and theoretical solution.
+
+    Two plots are generated (unless axes are passed in):
+    - Line plot: Error vs node index
+    - Contour plot: Error field over 2D mesh
+
+    Parameters
+    ----------
+    elements : array-like of shape (n_elements, 3)
+        Triangle connectivity array.
+
+    solution_df : pd.DataFrame
+        DataFrame with columns "x", "y", and "Phi".
+
+    theoretical_filename : str
+        Path to a text file containing the theoretical Phi values.
+
+    levels : int, optional
+        Number of contour levels to use for the contour plot. Default is 10.
+
+    ax_line : matplotlib.axes.Axes, optional
+        Axis for line plot. If None, a new figure is created.
+
+    ax_contour : matplotlib.axes.Axes, optional
+        Axis for 2D contour plot. If None, a new figure is created.
+    """
+    if not isinstance(solution_df, pd.DataFrame):
+        raise TypeError("solution_df must be a pandas DataFrame.")
+
+    required_columns = {"x", "y", "Phi"}
+    if not required_columns.issubset(solution_df.columns):
+        raise ValueError(f"solution_df must contain the columns: {required_columns}")
+
+    elements = np.asarray(elements)
     theoretical = np.loadtxt(theoretical_filename)
-    error = theoretical - solution["Phi"]
-    plt.figure(figsize=(8, 6))
-    plt.plot(np.arange(len(error)), error)
-    plt.title("Solution Error for each Node")
-    plt.xlabel("Index")
-    plt.ylabel("Error")
+
+    if len(theoretical) != len(solution_df):
+        raise ValueError("Theoretical data and solution must have the same length.")
+
+    error = theoretical - solution_df["Phi"].values
+    triangulation = mpl.tri.Triangulation(solution_df["x"], solution_df["y"], triangles=elements)
+
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+    filename_error_index = os.path.join(OUTPUT_FOLDER, "error_node.png")
+    filename_error_2d = os.path.join(OUTPUT_FOLDER, "error_2d.png")
+
+    # Line plot (Error per node)
+    fig, ax_line = plt.subplots(figsize=(8, 6))
+    ax_line.plot(np.arange(len(error)), error)
+    ax_line.set_title("Solution Error for each Node")
+    ax_line.set_xlabel("Node Index")
+    ax_line.set_ylabel("Error")
     plt.tight_layout()
-    plt.savefig(filename_error, dpi=300)
+    plt.savefig(filename_error_index, dpi=300)
     plt.show()
 
-    plt.figure(figsize=(8, 6))
-    contour = plt.tricontourf(triangulation, error, cmap="viridis", levels=levels)
-    plt.colorbar(contour, label=r"Error")
-
-    if show_knots:
-        plt.scatter(solution["x"], solution["y"], s=0.1, color="red")
-
-    plt.title("Solution Error")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.gca().set_aspect('equal', adjustable='box')
+    # 2D Error field
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 6))
+    contour = ax.tricontourf(triangulation, error, cmap="viridis", levels=levels)
+    plt.colorbar(contour, ax=ax, label="Error")
+    ax.set_title("Error Field over 2D Domain")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    # ax_contour.set_aspect('equal', adjustable='box')
     plt.tight_layout()
-    plt.savefig(filename_error_plot, dpi=300)
+    plt.savefig(filename_error_2d, dpi=300)
     plt.show()
