@@ -111,6 +111,52 @@ def _estimate_missing_bc(stiffness_matrix):
     return rank, total_dof
 
 
+def plot_scalar_func(x,y,func, label=None, title=None, levels=50, ax=None):
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    X,Y = np.meshgrid(x,y)
+
+    func_vectorized = np.vectorize(func)
+    Z = func_vectorized(X,Y)
+
+    contour = ax.contourf(X, Y, Z, cmap='viridis', levels=levels)
+    plt.colorbar(contour, ax=ax,label=label) 
+
+    ax.set_title(title)
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_boundary(nodes, dirichlet_indices, robin_indices):
+
+    fig, ax = plt.subplots(1, 2, sharey=True)
+
+    ax[0].scatter(nodes[dirichlet_indices][:,0], nodes[dirichlet_indices][:,1])
+
+    ax[0].set_title("Dirichlet Boundary Points")
+    ax[0].set_xlabel("x")
+    ax[0].set_ylabel("y")
+    # ax[0].axis("equal")
+
+    for segment in nodes[robin_indices]:
+        x = [segment[0,0], segment[1,0]]
+        y = [segment[0,1], segment[1,1]]
+
+        ax[1].plot(x, y)
+
+    ax[1].set_title("Robin Boundary Segments")
+    ax[1].set_xlabel("x")
+    # ax[1].axis("equal")
+
+    plt.suptitle("Validate Boundary Conditions")
+
+    plt.tight_layout()
+    plt.show()
+
 # _____________________________________________________________________________
 # Local Elements
 
