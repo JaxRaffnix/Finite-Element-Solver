@@ -187,6 +187,59 @@ def plot_boundary(nodes, dirichlet_func, dirichlet_indices, robin_indices=None, 
     plt.tight_layout()
     plt.show()
 
+
+def assemble_point(index: int, radius: float, angle: Optional[float] = None, width: Optional[float] = None, invert : Optional[bool] = False) -> dict:
+    """
+    Creates a dict with x, y coordinates and index key.
+    Either `angle` (for polar coords) or `width` (for horizontal x) must be provided.
+    
+    Parameters
+    ----------
+    index : int
+        Index of the point.
+    radius : float
+        Radius of the arc or circle.
+    angle : float, optional
+        Angle in radians for polar coordinates. Must be non-negative.
+    width : float, optional
+        Horizontal x value. Used to compute height via the circle equation.
+    inverr : bool, optional
+        Flips the sign of the 'y' value. Applicable if width instead of angle has been passed.
+    
+    Returns
+    -------
+    dict
+        A dictionary with 'index', 'x', 'y', and 'angle' keys.
+    
+    Raises
+    ------
+    ValueError
+        If neither or both `angle` and `width` are provided, or angle is negative.
+    """
+    
+    if (angle is None and width is None) or (angle is not None and width is not None):
+        raise ValueError("You must provide exactly one of `angle` or `width`, not both.")
+
+    phi = None
+    if angle is not None:
+        if angle < 0:
+            raise ValueError("Angle is negative. This can create issues with meshtools.AddCircleSegments!")
+        y = np.sin(angle) * radius
+        x = np.cos(angle) * radius
+        phi = angle
+    else:
+        x = width
+        y = np.sqrt(np.power(radius, 2) - np.power(width, 2))
+        if invert:
+            y = -y
+
+    return {
+        "index": index,
+        "x": x,
+        "y": y,
+        "angle": phi
+    }
+
 # _____________________________________________________________________________
 # Local Elements
 
