@@ -48,7 +48,7 @@ def get_number_of_elements(elements: np.ndarray) -> int:
     return len(elements)
 
 
-def plot_knots_elements(knots: np.ndarray, elements=None, ax=None, x_label="x", y_label="y", title_suffix=None):
+def plot_knots_elements(knots: np.ndarray, elements=None, ax=None, suffix=None, labels= ["x", "y"]):
     """
     Plots the net and the elements defined in it.
 
@@ -61,7 +61,9 @@ def plot_knots_elements(knots: np.ndarray, elements=None, ax=None, x_label="x", 
     TRIANGLE_COLOR = sns.color_palette("muted")[2]  # e.g., desaturated blue
     KNOT_COLOR = sns.color_palette("dark")[0]       # e.g., dark green
 
+    ax_was_none = False
     if ax is None:
+        ax_was_none = True
         fig, ax = plt.subplots(figsize=(6, 6))
 
     # make x and y axes equal length
@@ -71,7 +73,7 @@ def plot_knots_elements(knots: np.ndarray, elements=None, ax=None, x_label="x", 
     if elements is not None and len(elements) > 0:
         for element in elements:
             triangle_coordinates = knots[element]
-            polygon = mpl.patches.Polygon(
+            polygon = mpl.patches.Polygon( # type: ignore
                 triangle_coordinates, 
                 closed=True, fill=False, 
                 linewidth=LINEWIDTH, 
@@ -90,11 +92,11 @@ def plot_knots_elements(knots: np.ndarray, elements=None, ax=None, x_label="x", 
         linewidth=0.3,
     )
 
-    ax.set_title(f"Generated 2D Mesh with {len(knots)} nodes {title_suffix}")
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
+    ax.set_title(f"Generated 2D Mesh with {len(knots)} nodes{suffix or ''}")
+    ax.set_xlabel(labels[0])
+    ax.set_ylabel(labels[1])
 
-    if ax is None:
+    if ax_was_none:
         plt.tight_layout()
         plt.show()
 
@@ -110,6 +112,133 @@ def _estimate_missing_bc(stiffness_matrix):
 
     return rank, total_dof
 
+
+def plot_scalar_func(nodes, func, labels=["x", "y", "z"], title="Scalar Field", ax=None):
+    """
+    Plot a scalar function evaluated at 2D nodes using a scatter plot.
+
+    Args:
+    - nodes: Array of shape (n, 2) with (x, y) coordinates.
+    - func: Callable that takes (x, y) and returns a scalar.
+    - labels: Axis and colorbar labels [x, y, color].
+    - ax: Matplotlib axis. If None, a new figure is created.
+    - title: Custom title. If None, a default one is generated.
+    """
+    ax_was_none = False
+    if ax is None:
+        fig, ax = plt.subplots()
+        ax_was_none = True
+
+    # Evaluate function at each node
+    func_values = np.array([func(x, y) for x, y in nodes])
+
+    # Scatter plot with color mapped to function value
+    scatter = ax.scatter(
+        nodes[:, 0], nodes[:, 1],
+        c=func_values,
+        cmap='viridis',
+        s=20
+    )
+    plt.colorbar(scatter, ax=ax, label=labels[2])
+
+    # Title and axis labels
+    ax.set_title(title)
+    ax.set_xlabel(labels[0])
+    ax.set_ylabel(labels[1])
+
+    if ax_was_none:
+        ax.set_aspect('equal')
+        plt.tight_layout()
+        plt.show()
+
+
+def plot_boundary(nodes, dirichlet_func, dirichlet_indices, robin_indices=None, labels=["x", "y", "Dirichlet Value"]):
+    """
+    Visualize Dirichlet and Robin boundary conditions.
+
+    Args:
+    - nodes: Array of all mesh nodes (n, 2).
+    - dirichlet_func: Function to evaluate on Dirichlet nodes.
+    - dirichlet_indices: Indices of Dirichlet boundary nodes.
+    - robin_indices: Indices of Robin boundary segments (optional).
+    - labels: Axis and colorbar labels [x, y, colorbar label].
+    """
+
+    fig, ax = plt.subplots(1, 2, sharey=True)
+
+    # ____
+    # Plot Dirichlet
+    plot_scalar_func(nodes[dirichlet_indices], dirichlet_func, labels=labels, title="Dirichlet Points", ax=ax[0])
+
+    # _____
+    # Plot Robin
+    if robin_indices is not None: 
+        for segment in nodes[robin_indices]:
+            x = [segment[0,0], segment[1,0]]
+            y = [segment[0,1], segment[1,1]]
+            ax[1].plot(x, y)
+
+        ax[1].set_title("Robin Segments")
+        ax[1].set_xlabel(labels[0])
+        ax[1].set_ylabel(labels[1])
+
+    plt.suptitle("Boundary Conditions")
+
+    plt.tight_layout()
+    plt.show()
+
+
+def assemble_point(index: int, radius: float, angle: Optional[float] = None, width: Optional[float] = None, invert : Optional[bool] = False) -> dict:
+    """
+    Creates a dict with x, y coordinates and index key.
+    Either `angle` (for polar coords) or `width` (for horizontal x) must be provided.
+    
+    Parameters
+    ----------
+    index : int
+        Index of the point.
+    radius : float
+        Radius of the arc or circle.
+    angle : float, optional
+        Angle in radians for polar coordinates. Must be non-negative.
+    width : float, optional
+        Horizontal x value. Used to compute height via the circle equation.
+    inverr : bool, optional
+        Flips the sign of the 'y' value. Applicable if width instead of angle has been passed.
+    
+    Returns
+    -------
+    dict
+        A dictionary with 'index', 'x', 'y', and 'angle' keys.
+    
+    Raises
+    ------
+    ValueError
+        If neither or both `angle` and `width` are provided, or angle is negative.
+    """
+    
+    if (angle is None and width is None) or (angle is not None and width is not None):
+        raise ValueError("You must provide exactly one of `angle` or `width`, not both.")
+
+    phi = None
+    if angle is not None:
+        if angle < 0:
+            raise ValueError("Angle is negative. This can create issues with meshtools.AddCircleSegments!")
+        y = np.sin(angle) * radius
+        x = np.cos(angle) * radius
+        phi = angle
+    else:
+        x = width
+        y = np.sqrt(np.power(radius, 2) - np.power(width, 2))
+        if invert:
+            y = -y
+
+    return {
+        "index": index,
+        "x": x,
+        "y": y,
+        "angle": phi
+    }
 
 # _____________________________________________________________________________
 # Local Elements
@@ -477,7 +606,8 @@ def plot_result(
     solution: pd.DataFrame,
     levels: int = 10,
     ax: Optional[plt.Axes] = None,
-    suffix: Optional[str] = None
+    labels = ["x", "y", r"$\Phi(x,y)$"],
+    title = "Computed 2D FEM Solution"
 ) -> None:
     """
     Plots the 2D FEM solution as a filled contour plot.
@@ -510,10 +640,10 @@ def plot_result(
         fig, ax = plt.subplots(figsize=(8, 6))
 
     contour = ax.tricontourf(triangulation, solution["Phi"], cmap="viridis", levels=levels)
-    plt.colorbar(contour, ax=ax, label=r"$\Phi$")
-    ax.set_title(f"Computed 2D FEM Solution with {len(solution)} nodes and {levels} color levels {suffix}")
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
+    plt.colorbar(contour, ax=ax, label=labels[2])
+    ax.set_title(title)
+    ax.set_xlabel(labels[0])
+    ax.set_ylabel(labels[1])
     # ax.set_aspect('equal', adjustable='box')
 
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
