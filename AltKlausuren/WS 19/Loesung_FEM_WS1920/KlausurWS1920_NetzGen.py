@@ -7,7 +7,7 @@ Netz
 """
 
 import numpy as np
-import meshtools as mt
+import src.fem.meshtools as mt
 import matplotlib.pyplot as plt
 
 # Abmessungen
