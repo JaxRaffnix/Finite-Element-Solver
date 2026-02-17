@@ -13,4 +13,3 @@ functions_filename = "functions.py"
 save_path = "Hoegen_82358"
 os.mkdir(save_path, exist_ok=True)
 os.chdir(save_path)
-os.write()

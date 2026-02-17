@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+src/fem/__init__.py
+src/fem/functions.py
+src/fem/meshtools.py
+src/finite_element_solver.egg-info/PKG-INFO
+src/finite_element_solver.egg-info/SOURCES.txt
+src/finite_element_solver.egg-info/dependency_links.txt
+src/finite_element_solver.egg-info/requires.txt
+src/finite_element_solver.egg-info/top_level.txt

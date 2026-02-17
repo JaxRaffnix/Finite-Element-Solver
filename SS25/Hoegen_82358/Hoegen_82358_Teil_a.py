@@ -3,8 +3,8 @@ import sys
 sys.path.append("../../")
 
 import numpy as np
-import functions as myfunc
-import meshtools as mt
+import src.fem.functions as myfunc
+import src.fem.meshtools as mt
 import matplotlib.pyplot as plt
 
 

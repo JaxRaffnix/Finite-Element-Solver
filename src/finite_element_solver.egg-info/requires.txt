@@ -1,0 +1,13 @@
+contourpy>=1.3.3
+cycler>=0.12.1
+ipykernel>=7.2.0
+ipython>=9.10.0
+matplotlib>=3.10.8
+meshpy>=2025.1.1
+meshtools>=0.2.0
+numpy>=2.4.2
+pandas>=3.0.0
+pyvista>=0.47.0
+scipy>=1.17.0
+seaborn>=0.13.2
+sympy>=1.14.0
