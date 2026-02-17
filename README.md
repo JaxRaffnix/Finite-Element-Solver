@@ -1,6 +1,64 @@
 # FEM 2D Solver
 
-Beispielanwendung unter [Potentialberchnung](Alktlausuren/SS 2025/potential.ipynb).
+Die allgmeine differenzeille Gleichung
+
+$$
+-\frac{\partial}{\partial x}\left(\alpha_1(x, y) \frac{\partial \Phi(x, y)}{\partial x}\right)-\frac{\partial}{\partial y}\left(\alpha_2(x, y) \frac{\partial \Phi(x, y)}{\partial y}\right)+\beta(x, y) \Phi(x, y)=f(x, y)
+$$
+
+mit den Dirichlet Randbedingungen
+
+$$
+\Phi(x,y) = \delta(x,y) \quad x,y \in G_D
+$$
+
+und den Robin Randbedingungen
+
+$$
+\left( \alpha_1(x,y) \frac{\partial \Phi(x, y)}{\partial x}, \alpha_2(x,y) \frac{\partial \Phi(x,y)}{\partial y} \right) \cdot \vec{n} + \gamma(x,y) \Phi(x,y) = \rho(x,y)
+
+\\ \quad
+
+x,y \in G_R
+$$
+
+wird mithilfe des Galerkin-Verfahrens gelöst.
+
+Beispielanwendung unter [Potentialberchnung](<AltKlausuren/SS 25/potential.ipynb>).
+
+## Example
+
+Anordnung von NL parallelen Platten. Die Platten sind zu zwei Blöcken (rot, blau) parallelgeschaltet. Die Blöcke werden auf konstantem Potential V0 und −V0 gehalten. In den Zwischenräumen befindet sich eine leitfahige, dielektrische Flüssigkeit (σ, r). Die Leitf¨ ahigkeit der Flüssigkeit sei sehr gering, so dass wir folgendes annehmen können:
+
+$$
+div(\vec{D}) = \rho
+$$
+
+$$
+rot(\vec{E}) = \vec{0}
+$$
+
+$$
+rot(\vec{H}) = \vec{j} + \frac{\partial \vec{D}}{\partial t}
+$$
+
+$$
+\vec{j} = \sigma \vec{E}
+$$
+
+$$
+\vec{D} = \epsilon_0 \epsilon_r \vec{E}
+$$
+
+Aus den drei obigen Gleichungen folgt, für den Fall einer harmonischen Spannung an den Blöcken, die zu lösende Gleichung:
+
+$$
+-\mathrm{div}\left( (\sigma + i\omega\varepsilon_0\varepsilon_r) \mathrm{grad}(\Phi) \right) = 0
+$$
+
+![Kondensatoren](<AltKlausuren/WS 18/aufgabe.png>)
+
+![alt text](<AltKlausuren/WS 18/images/solution.png>)
 
 ## Meshtools Tipps
 

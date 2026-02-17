@@ -647,7 +647,7 @@ def plot_result(
     # ax.set_aspect('equal', adjustable='box')
 
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-    filename_solution = os.path.join(OUTPUT_FOLDER, "solution.png")
+    filename_solution = os.path.join(OUTPUT_FOLDER, f"{title}.png")
     plt.tight_layout()
     plt.savefig(filename_solution, dpi=300)
     plt.show()
