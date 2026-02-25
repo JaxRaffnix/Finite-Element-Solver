@@ -36,7 +36,7 @@ $$
 
 ## Beispiel
 
-![Aufgabe](<AltKlausuren/SS 25/Ansicht.png>)
+![Aufgabe](<AltKlausuren/SS 25/images/Ansicht.png>)
 
 Für die gzeigte Materialanordung wird der Stromfluss untersucht, wenn die Spannung $V_0$ und $-V_0$ an den Anschlüssen angelegt wird. Die Materialien sind dielektrisch und leitfähig, somit gilt:
 
@@ -56,9 +56,9 @@ Die vollständige Beschreibung aller Parameter sowie die Berechnung findet sich 
 
 | Beschreibung | Bild |
 |---|---|
-| Mesh | ![Mesh](<AltKlausuren/SS 25/mesh.png>) |
-| Stromlinien | ![Stromlinien](<AltKlausuren/SS 25/current.png>) |
-| Potentiallinien | ![Potentiallinien](<AltKlausuren/SS 25/potential.png>) |
+| Mesh | ![Mesh](<AltKlausuren/SS 25/images/mesh.png>) |
+| Stromlinien | ![Stromlinien](<AltKlausuren/SS 25/images/current.png>) |
+| Potentiallinien | ![Potentiallinien](<AltKlausuren/SS 25/images/potential.png>) |
 
 ## Meshtools Tipps
 
