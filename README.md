@@ -1,64 +1,64 @@
-# FEM 2D Solver
+# 2D Finite Elemente Analyse
 
-Die allgmeine differenzeille Gleichung
+Dieses Projekt entschand im Rahmen der Vorlesung "Methoden der Feldberechnung" bei Prof. Jürgen Weizenecker an der Hochschule Karslsruhe. Der Meshgenerator wurde bereitgestellt und ist eine Erweiterung von [meshpy](https://documen.tician.de/meshpy/). Die Fintive-Elemente-Berechnung mithilfe des Galerkin-Verfahrens wurde eigenständig implementiert. 
+
+Ziel ist es, bekannte Randwertaufgaben für verschiedene Anordnungen von elektrisch leitende Materialien zu lösen.
+
+## Theorie
+
+Die allgmeine differenzielle Gleichung
 
 $$
 -\frac{\partial}{\partial x}\left(\alpha_1(x, y) \frac{\partial \Phi(x, y)}{\partial x}\right)-\frac{\partial}{\partial y}\left(\alpha_2(x, y) \frac{\partial \Phi(x, y)}{\partial y}\right)+\beta(x, y) \Phi(x, y)=f(x, y)
 $$
 
-mit den Dirichlet Randbedingungen
+wird diskretisiert und numerisch berechnet. Dabei ist $\Phi(x, y)$ die unbekannte Zielfunktion, $\alpha_1(x, y)$ und $\alpha_2(x, y)$ sind die Diffusionskoeffizienten, $\beta(x, y)$ ist der Reaktionskoeffizient und $f(x, y)$ ist die Quellfunktion.
+
+Über die Lösung sind folgende Randbedingungen bekannt:
+
+### Dirichlet Randbedingungen
+
+Der Wert der Funktion $\Phi(x,y)$ ist an allen Punkten auf dem Rand $G_D$ bekannt und wird durch die Funktion $\delta(x,y)$ beschrieben:
 
 $$
 \Phi(x,y) = \delta(x,y) \quad x,y \in G_D
 $$
 
-und den Robin Randbedingungen
+### Robin Randbedingungen
+
+Für alle Punkte auf dem Rand $G_R$ gilt die folgende Einschränkung mit den bekannten Funktionen $\alpha_1(x,y)$, $\alpha_2(x,y)$, $\gamma(x,y)$ und $\rho(x,y)$:
 
 $$
 \left( \alpha_1(x,y) \frac{\partial \Phi(x, y)}{\partial x}, \alpha_2(x,y) \frac{\partial \Phi(x,y)}{\partial y} \right) \cdot \vec{n} + \gamma(x,y) \Phi(x,y) = \rho(x,y)
-
-\\ \quad
-
+\quad
 x,y \in G_R
 $$
 
-wird mithilfe des Galerkin-Verfahrens gelöst.
+## Beispiel
 
-Beispielanwendung unter [Potentialberchnung](<AltKlausuren/SS 25/potential.ipynb>).
+![Aufgabe](<AltKlausuren/SS 25/Ansicht.png>)
 
-## Example
-
-Anordnung von NL parallelen Platten. Die Platten sind zu zwei Blöcken (rot, blau) parallelgeschaltet. Die Blöcke werden auf konstantem Potential V0 und −V0 gehalten. In den Zwischenräumen befindet sich eine leitfahige, dielektrische Flüssigkeit (σ, r). Die Leitf¨ ahigkeit der Flüssigkeit sei sehr gering, so dass wir folgendes annehmen können:
+Für die gzeigte Materialanordung wird der Stromfluss untersucht, wenn die Spannung $V_0$ und $-V_0$ an den Anschlüssen angelegt wird. Die Materialien sind dielektrisch und leitfähig, somit gilt:
 
 $$
-div(\vec{D}) = \rho
+\operatorname{div}\left(\vec{j}_\sigma+\vec{j}_D\right)=\operatorname{div}\left(\vec{j}+\frac{\partial \vec{D}}{\partial t}\right)=\operatorname{div}(\operatorname{rot} \vec{H})=0
 $$
 
-$$
-rot(\vec{E}) = \vec{0}
-$$
+wobei für die Stromdichte $\vec{j}=\sigma \vec{E}=-\sigma$ grad $\Phi$ gelte. Damit ergibt sich das harmonische Problem
 
 $$
-rot(\vec{H}) = \vec{j} + \frac{\partial \vec{D}}{\partial t}
+-\operatorname{div}\left(\left(\sigma+i \varepsilon_0 \varepsilon_r \omega\right) \operatorname{grad} \Phi(x, y)\right)=0
 $$
 
-$$
-\vec{j} = \sigma \vec{E}
-$$
+Die vollständige Beschreibung aller Parameter sowie die Berechnung findet sich im [folder](<AltKlausuren/SS 25>).
 
-$$
-\vec{D} = \epsilon_0 \epsilon_r \vec{E}
-$$
+### Ergebnisse
 
-Aus den drei obigen Gleichungen folgt, für den Fall einer harmonischen Spannung an den Blöcken, die zu lösende Gleichung:
-
-$$
--\mathrm{div}\left( (\sigma + i\omega\varepsilon_0\varepsilon_r) \mathrm{grad}(\Phi) \right) = 0
-$$
-
-![Kondensatoren](<AltKlausuren/WS 18/aufgabe.png>)
-
-![alt text](<AltKlausuren/WS 18/images/solution.png>)
+| Beschreibung | Bild |
+|---|---|
+| Mesh | ![Mesh](<AltKlausuren/SS 25/mesh.png>) |
+| Potentiallinien | ![Potentiallinien](<AltKlausuren/SS 25/potential.png>) |
+| Stromlinien | ![Stromlinien](<AltKlausuren/SS 25/current.png>) |
 
 ## Meshtools Tipps
 
