@@ -41,13 +41,13 @@ $$
 Für die gzeigte Materialanordung wird der Stromfluss untersucht, wenn die Spannung $V_0$ und $-V_0$ an den Anschlüssen angelegt wird. Die Materialien sind dielektrisch und leitfähig, somit gilt:
 
 $$
-\operatorname{div}\left(\vec{j}_\sigma+\vec{j}_D\right)=\operatorname{div}\left(\vec{j}+\frac{\partial \vec{D}}{\partial t}\right)=\operatorname{div}(\operatorname{rot} \vec{H})=0
+\text{div}\left(\vec{j}_\sigma+\vec{j}_D\right)=\text{div}\left(\vec{j}+\frac{\partial \vec{D}}{\partial t}\right)=\text{div}(\text{rot} \vec{H})=0
 $$
 
-wobei für die Stromdichte $\vec{j}=\sigma \vec{E}=-\sigma$ grad $\Phi$ gelte. Damit ergibt sich das harmonische Problem
+wobei für die Stromdichte $\vec{j}=\sigma \vec{E}=-\sigma \nabla \Phi$ gelte. Damit ergibt sich das harmonische Problem
 
 $$
--\operatorname{div}\left(\left(\sigma+i \varepsilon_0 \varepsilon_r \omega\right) \operatorname{grad} \Phi(x, y)\right)=0
+-\text{div}\left(\left(\sigma+i \varepsilon_0 \varepsilon_r \omega\right) \text{grad} \Phi(x, y)\right)=0
 $$
 
 Die vollständige Beschreibung aller Parameter sowie die Berechnung findet sich im [folder](<AltKlausuren/SS 25>).
@@ -57,8 +57,8 @@ Die vollständige Beschreibung aller Parameter sowie die Berechnung findet sich 
 | Beschreibung | Bild |
 |---|---|
 | Mesh | ![Mesh](<AltKlausuren/SS 25/mesh.png>) |
-| Potentiallinien | ![Potentiallinien](<AltKlausuren/SS 25/potential.png>) |
 | Stromlinien | ![Stromlinien](<AltKlausuren/SS 25/current.png>) |
+| Potentiallinien | ![Potentiallinien](<AltKlausuren/SS 25/potential.png>) |
 
 ## Meshtools Tipps
 
